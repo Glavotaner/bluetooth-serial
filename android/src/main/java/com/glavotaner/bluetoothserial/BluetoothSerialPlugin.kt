@@ -194,8 +194,7 @@ class BluetoothSerialPlugin : Plugin() {
     @PluginMethod
     fun isConnected(call: PluginCall) {
         val bluetoothState = implementation.state
-        val result = JSObject()
-            .put("isConnected", bluetoothState == ConnectionState.CONNECTED)
+        val result = JSObject().put("isConnected", bluetoothState == ConnectionState.CONNECTED)
         call.resolve(result)
     }
 
@@ -261,10 +260,10 @@ class BluetoothSerialPlugin : Plugin() {
         }
     }
 
+    @SuppressLint("MissingPermission")
     private fun listPairedDevices(call: PluginCall) {
         val deviceList = JSONArray()
-        @SuppressLint("MissingPermission") val bondedDevices = implementation.bondedDevices
-        for (device in bondedDevices) {
+        for (device in implementation.bondedDevices) {
             deviceList.put(deviceToJSON(device))
         }
         val result = JSObject().put("devices", deviceList)

@@ -173,7 +173,7 @@ class BluetoothSerial(
             mAdapter.cancelDiscovery()
             connectToSocket()
             // Reset the ConnectThread because we're done
-            resetConnectThread()
+            synchronized(this@BluetoothSerial) { mConnectThread = null }
             startIOThread(mmSocket, mSocketType)
             sendConnectedDeviceToPlugin()
         }
@@ -215,13 +215,8 @@ class BluetoothSerial(
         }
 
         init {
-            // Get a BluetoothSocket for a connection with the given BluetoothDevice
             mmSocket = getSocket(mmDevice)
         }
-    }
-
-    private fun resetConnectThread() {
-        synchronized(this@BluetoothSerial) { mConnectThread = null }
     }
 
     /**
@@ -272,7 +267,7 @@ class BluetoothSerial(
                 message.what = SUCCESS
             } catch (e: IOException) {
                 Log.e(TAG, "Exception during write", e)
-                message.data = Bundle().also { it.putString("error", e.message) }
+                message.data = Bundle().apply { putString("error", e.message) }
             }
             message.sendToTarget()
         }
