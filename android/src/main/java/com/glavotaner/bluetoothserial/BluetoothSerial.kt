@@ -64,8 +64,10 @@ class BluetoothSerial(
     @Synchronized
     fun resetService() {
         if (D) Log.d(TAG, "start")
-        tryCancelThread(mConnectThread)
-        tryCancelThread(mIOThread)
+        mConnectThread?.cancel()
+        mConnectThread = null
+        mIOThread?.cancel()
+        mIOThread = null
         state = ConnectionState.NONE
     }
 
@@ -79,10 +81,12 @@ class BluetoothSerial(
         if (D) Log.d(TAG, "connect to: $device")
         // Cancel any thread attempting to make a connection
         if (mState === ConnectionState.CONNECTING) {
-            tryCancelThread(mConnectThread)
+            mConnectThread?.cancel()
+            mConnectThread = null
         }
         // Cancel any thread currently running a connection
-        tryCancelThread(mIOThread)
+        mIOThread?.cancel()
+        mIOThread = null
         // Start the thread to connect with the given device
         mConnectThread = ConnectThread(device)
         mConnectThread!!.start()
@@ -98,8 +102,10 @@ class BluetoothSerial(
     @Synchronized
     fun startIOThread(socket: BluetoothSocket?, socketType: String) {
         if (D) Log.d(TAG, "connected, Socket Type:$socketType")
-        tryCancelThread(mConnectThread)
-        tryCancelThread(mIOThread)
+        mConnectThread?.cancel()
+        mConnectThread = null
+        mIOThread?.cancel()
+        mIOThread = null
         // Start the thread to manage the connection and perform transmissions
         mIOThread = IOThread(socket, socketType)
         mIOThread!!.start()
@@ -300,14 +306,6 @@ class BluetoothSerial(
         readHandler.obtainMessage(SUCCESS).apply {
             this.data = Bundle().apply { putString("data", data) }
         }.sendToTarget()
-    }
-
-    private fun tryCancelThread(thread: CancellableThread?) {
-        var thread = thread
-        if (thread != null) {
-            thread.cancel()
-            thread = null
-        }
     }
 
     companion object {
