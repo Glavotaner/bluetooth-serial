@@ -206,8 +206,7 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     fun settings(call: PluginCall) {
-        val bluetoothSettingsIntent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
-        activity.startActivity(bluetoothSettingsIntent)
+        activity.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS))
         call.resolve()
     }
 
@@ -262,11 +261,8 @@ class BluetoothSerialPlugin : Plugin() {
 
     @SuppressLint("MissingPermission")
     private fun listPairedDevices(call: PluginCall) {
-        val deviceList = JSONArray()
-        for (device in implementation.bondedDevices) {
-            deviceList.put(deviceToJSON(device))
-        }
-        val result = JSObject().put("devices", deviceList)
+        val devices = implementation.bondedDevices.map { deviceToJSON(it) }
+        val result = JSObject().put("devices", JSArray(devices))
         call.resolve(result)
     }
 
@@ -337,14 +333,10 @@ class BluetoothSerialPlugin : Plugin() {
 
         @SuppressLint("MissingPermission")
         fun deviceToJSON(device: BluetoothDevice): JSObject {
-            val json = JSObject()
+            return JSObject()
                 .put("name", device.name)
                 .put("address", device.address)
-            val btClass = device.bluetoothClass
-            if (btClass != null) {
-                json.put("deviceClass", btClass.deviceClass)
-            }
-            return json
+                .put("deviceClass", device.bluetoothClass?.deviceClass ?: JSObject.NULL)
         }
     }
 }
