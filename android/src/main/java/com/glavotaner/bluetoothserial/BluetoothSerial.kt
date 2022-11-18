@@ -43,14 +43,7 @@ class BluetoothSerial(
     fun startDiscovery() {
         mAdapter.startDiscovery()
     }
-    /**
-     * Return the current connection state.
-     */
-    /**
-     * Set the current state of the chat connection
-     *
-     * @param state An integer defining the current connection state
-     */
+
     @get:Synchronized
     @set:Synchronized
     var state: ConnectionState
@@ -88,8 +81,7 @@ class BluetoothSerial(
         mIOThread?.cancel()
         mIOThread = null
         // Start the thread to connect with the given device
-        mConnectThread = ConnectThread(device)
-        mConnectThread!!.start()
+        mConnectThread = ConnectThread(device).also { it.start() }
         state = ConnectionState.CONNECTING
     }
 
@@ -107,8 +99,7 @@ class BluetoothSerial(
         mIOThread?.cancel()
         mIOThread = null
         // Start the thread to manage the connection and perform transmissions
-        mIOThread = IOThread(socket, socketType)
-        mIOThread!!.start()
+        mIOThread = IOThread(socket, socketType).also { it.start() }
     }
 
     private fun sendConnectionErrorToPlugin(error: String) {
@@ -127,18 +118,18 @@ class BluetoothSerial(
      */
     fun write(out: ByteArray?) {
         // Create temporary object
-        var r: IOThread?
+        var ioThread: IOThread?
         // Synchronize a copy of the ConnectedThread
         synchronized(this) {
             if (mState !== ConnectionState.CONNECTED) return
-            r = mIOThread
+            ioThread = mIOThread
         }
         // Perform the write unsynchronized
-        r!!.write(out)
+        ioThread!!.write(out)
     }
 
     private fun sendStateToPlugin(state: ConnectionState) {
-        val stateBundle = Bundle().also { it.putInt("state", state.value()) }
+        val stateBundle = Bundle().apply { putInt("state", state.value()) }
         sendConnectionStateToPlugin(SUCCESS, stateBundle)
     }
 
@@ -179,12 +170,8 @@ class BluetoothSerial(
         }
 
         private fun sendConnectedDeviceToPlugin() {
-            val btClass = mmDevice.bluetoothClass
-            val device = BTDevice(
-                mmDevice.address,
-                mmDevice.name,  // TODO class
-                btClass?.deviceClass ?: 0
-            )
+            val bluetoothClass = mmDevice.bluetoothClass
+            val device = BTDevice(mmDevice.address, mmDevice.name, bluetoothClass.deviceClass)
             connectionHandler.obtainMessage(SUCCESS).apply {
                 data = Bundle().apply {
                     putInt("state", ConnectionState.CONNECTED.value())
