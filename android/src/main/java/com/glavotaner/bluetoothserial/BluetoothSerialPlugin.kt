@@ -303,12 +303,13 @@ class BluetoothSerialPlugin : Plugin() {
                 }
             }
         }
-        val activity: Activity = activity
-        activity.registerReceiver(discoverReceiver, IntentFilter(BluetoothDevice.ACTION_FOUND))
-        activity.registerReceiver(
-            discoverReceiver,
-            IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-        )
+        activity.apply {
+            registerReceiver(discoverReceiver, IntentFilter(BluetoothDevice.ACTION_FOUND))
+            registerReceiver(
+                discoverReceiver,
+                IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
+            )
+        }
         implementation.startDiscovery()
     }
 
