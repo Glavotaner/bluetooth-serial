@@ -24,6 +24,7 @@ import com.getcapacitor.annotation.PermissionCallback
 import org.json.JSONArray
 import org.json.JSONException
 
+
 @SuppressLint("InlinedApi")
 @CapacitorPlugin(
     name = "BluetoothSerial",
@@ -42,6 +43,8 @@ class BluetoothSerialPlugin : Plugin() {
     private lateinit var implementation: BluetoothSerial
     private var connectCall: PluginCall? = null
     private var writeCall: PluginCall? = null
+    private var discoveryCall: PluginCall? = null
+    private var discoveryReceiver: BroadcastReceiver? = null
     private var buffer = StringBuffer()
     override fun load() {
         super.load()
@@ -49,24 +52,26 @@ class BluetoothSerialPlugin : Plugin() {
         val connectionHandler = Handler(looper) { message: android.os.Message ->
             val data = message.data
             val connectionState = ConnectionState.values()[data.getInt("state")]
-            if (connectionState == ConnectionState.CONNECTED && connectCall != null) {
-                val device = data.getParcelable<BTDevice>("device")
-                connectCall!!.resolve(JSObject().put("device", device!!.toJSObject()))
-                connectCall = null
+            if (message.what == Message.SUCCESS) {
+                val state: JSObject = JSObject().put("state", connectionState.value())
+                notifyListeners("connectionChange", state)
+                if (connectCall != null && connectionState === ConnectionState.CONNECTED) {
+                    connectCall!!.resolve(state)
+                    connectCall = null
+                }
+                if (connectionState === ConnectionState.NONE) connectCall = null
             }
-            if (message.what == Message.ERROR && connectCall != null) {
+            else if (connectCall != null) {
                 val error = data.getString("error")
                 connectCall!!.reject(error)
                 connectCall = null
             }
-            val result = JSObject().put("state", connectionState.value())
-            notifyListeners("connectionChange", result)
             false
         }
         val writeHandler = Handler(looper) { message: android.os.Message ->
-            if (message.what == Message.SUCCESS && writeCall != null) {
+            if (message.what == Message.SUCCESS) {
                 writeCall!!.resolve()
-            } else if (writeCall != null) {
+            } else {
                 val error = message.data.getString("error")
                 writeCall!!.reject(error)
             }
@@ -84,42 +89,6 @@ class BluetoothSerialPlugin : Plugin() {
     }
 
     @PluginMethod
-    override fun checkPermissions(pluginCall: PluginCall) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            super.checkPermissions(pluginCall)
-        } else {
-            checkCompatPermissions(pluginCall)
-        }
-    }
-
-    /*
-    * Since Android < R doesn't require CONNECT and SCAN permissions, this returns GRANTED for those
-    * and checks the true state of COARSE_LOCATION.
-    * */
-    private fun checkCompatPermissions(pluginCall: PluginCall) {
-        val queriedPermissions = pluginCall.getArray("permissions")
-        val permissionResults = JSObject()
-        try {
-            for (permission in queriedPermissions.toList<Any>()) {
-                val alias = permission as String
-                permissionResults.put(alias, checkCompatPermission(alias))
-            }
-        } catch (e: JSONException) {
-            Log.e(TAG, e.message!!)
-        }
-        pluginCall.resolve(permissionResults)
-    }
-
-    private fun checkCompatPermission(permissionAlias: String): PermissionState {
-        var permissionState = PermissionState.GRANTED
-        // CONNECT and SCAN are granted as they are not supported by this version of Android
-        if (permissionAlias == LOCATION) {
-            permissionState = getPermissionState(permissionAlias)
-        }
-        return permissionState
-    }
-
-    @PluginMethod
     fun echo(call: PluginCall) {
         val value = call.getString("value") as String
         val ret = JSObject().put("value", implementation.echo(value))
@@ -128,10 +97,11 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     fun connect(call: PluginCall) {
+        if (rejectIfBluetoothDisabled(call)) return
         if (hasCompatPermission(CONNECT)) {
             connectToDevice(call)
         } else {
-            requestPermissionForAlias(CONNECT, call, "connectPermsCallback")
+            requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
         }
     }
 
@@ -140,19 +110,15 @@ class BluetoothSerialPlugin : Plugin() {
         val device = implementation.getRemoteDevice(macAddress)
         if (device != null) {
             connectCall = call
-            implementation.connect(device)
+            val secureConnection = call.getBoolean("secure")
+            if (secureConnection == true) {
+                implementation.connect(device)
+            } else {
+                implementation.connectInsecure(device)
+            }
             buffer.setLength(0)
         } else {
             call.reject("Could not connect to $macAddress")
-        }
-    }
-
-    @PermissionCallback
-    private fun connectPermsCallback(call: PluginCall) {
-        if (getPermissionState(CONNECT) == PermissionState.GRANTED) {
-            connectToDevice(call)
-        } else {
-            call.reject("Connect permission denied")
         }
     }
 
@@ -165,7 +131,8 @@ class BluetoothSerialPlugin : Plugin() {
     @PluginMethod
     @Throws(JSONException::class)
     fun write(call: PluginCall) {
-        val data = call.data["data"] as ByteArray
+        if (rejectIfBluetoothDisabled(call)) return
+        val data = (call.data["data"] as String).toByteArray()
         writeCall = call
         implementation.write(data)
     }
@@ -212,10 +179,10 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     fun enable(call: PluginCall) {
-        if (getPermissionState(LOCATION) == PermissionState.GRANTED) {
+        if (hasCompatPermission(CONNECT)) {
             enableBluetooth(call)
         } else {
-            requestPermissionForAlias(LOCATION, call, "enablePermsCallback")
+            requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
         }
     }
 
@@ -224,38 +191,20 @@ class BluetoothSerialPlugin : Plugin() {
         startActivityForResult(call, enableIntent, "enableBluetoothActivityCallback")
     }
 
-    @PermissionCallback
-    private fun enablePermsCallback(call: PluginCall) {
-        if (getPermissionState(LOCATION) == PermissionState.GRANTED) {
-            enableBluetooth(call)
-        } else {
-            call.reject("Location permission denied")
-        }
-    }
-
     @ActivityCallback
     private fun enableBluetoothActivityCallback(call: PluginCall, activityResult: ActivityResult) {
         val isEnabled = activityResult.resultCode == Activity.RESULT_OK
-        Log.d(TAG, "User enabled Bluetooth: $isEnabled")
         val result = JSObject().put("isEnabled", isEnabled)
         call.resolve(result)
     }
 
     @PluginMethod
     fun list(call: PluginCall) {
+        if (rejectIfBluetoothDisabled(call)) return
         if (hasCompatPermission(CONNECT)) {
             listPairedDevices(call)
         } else {
-            requestPermissionForAlias(CONNECT, call, "listPermsCallback")
-        }
-    }
-
-    @PermissionCallback
-    private fun listPermsCallback(call: PluginCall) {
-        if (getPermissionState(CONNECT) == PermissionState.GRANTED) {
-            listPairedDevices(call)
-        } else {
-            call.reject("Connect permission denied")
+            requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
         }
     }
 
@@ -268,25 +217,19 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     fun discoverUnpaired(call: PluginCall) {
+        if (rejectIfBluetoothDisabled(call)) return
         if (hasCompatPermission(SCAN)) {
             startDiscovery(call)
         } else {
-            requestPermissionForAlias(SCAN, call, "discoverPermsCallback")
-        }
-    }
-
-    @PermissionCallback
-    private fun discoverPermsCallback(call: PluginCall) {
-        if (getPermissionState(SCAN) == PermissionState.GRANTED) {
-            startDiscovery(call)
-        } else {
-            call.reject("Scan permission denied")
+            requestPermissionForAlias(SCAN, call, "scanPermissionCallback")
         }
     }
 
     @SuppressLint("MissingPermission")
     private fun startDiscovery(call: PluginCall) {
-        val discoverReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        cancelDiscovery()
+        discoveryCall = call
+        discoveryReceiver = object : BroadcastReceiver() {
             private val unpairedDevices = JSONArray()
             private val result = JSObject().put("devices", unpairedDevices)
             override fun onReceive(context: Context, intent: Intent) {
@@ -303,14 +246,140 @@ class BluetoothSerialPlugin : Plugin() {
                 }
             }
         }
-        activity.apply {
-            registerReceiver(discoverReceiver, IntentFilter(BluetoothDevice.ACTION_FOUND))
-            registerReceiver(
-                discoverReceiver,
-                IntentFilter(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
-            )
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
         }
+        activity.registerReceiver(discoveryReceiver, filter)
         implementation.startDiscovery()
+    }
+
+    @PluginMethod
+    fun cancelDiscovery(call: PluginCall) {
+        if (hasCompatPermission(SCAN)) {
+            cancelDiscovery()
+            call.resolve()
+        } else {
+            requestPermissionForAlias(SCAN, call, "scanPermissionCallback")
+        }
+    }
+
+    private fun cancelDiscovery() {
+        if (discoveryCall != null) {
+            discoveryCall?.reject("Discovery cancelled")
+            discoveryCall = null
+            implementation.cancelDiscovery()
+            activity.unregisterReceiver(discoveryReceiver)
+            discoveryReceiver = null
+        }
+    }
+
+    @PluginMethod
+    override fun checkPermissions(call: PluginCall) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            super.checkPermissions(call)
+        } else {
+            checkCompatPermissions(call)
+        }
+    }
+
+    private fun checkCompatPermissions(call: PluginCall) {
+        call.resolve(
+            JSObject()
+                .put(LOCATION, getPermissionState(LOCATION))
+                .put(SCAN, PermissionState.GRANTED)
+                .put(CONNECT, PermissionState.GRANTED)
+        )
+    }
+
+    @PluginMethod
+    override fun requestPermissions(call: PluginCall) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            super.requestPermissions(call)
+        } else {
+            requestCompatPermissions(call)
+        }
+    }
+
+    /*
+    * Request location permission if requested, otherwise resolve with all requested permissions
+    * granted, as Android 11< only requires location permission.
+    * */
+    private fun requestCompatPermissions(call: PluginCall) {
+        val requestedPermissions = call.getArray("permissions")
+        try {
+            // for Android 11< we only need/can request location permission, all others are granted
+            if (requestedPermissions.toList<Any>()
+                    .contains(LOCATION) && getPermissionState(LOCATION) != PermissionState.GRANTED
+            ) {
+                requestPermissionForAlias(LOCATION, call, "requestCompatPermissionsCallback")
+            } else {
+                val permissions = getGrantedPermissions(requestedPermissions)
+                call.resolve(permissions)
+            }
+        } catch (exception: JSONException) {
+            val message = exception.message
+            Log.e(TAG, message!!)
+            call.reject(message)
+        }
+    }
+
+    @PermissionCallback
+    private fun requestCompatPermissionsCallback(call: PluginCall) {
+        val requestedPermissions = call.getArray("permissions")
+        try {
+            val permissions = getGrantedPermissions(requestedPermissions)
+            permissions.put(LOCATION, getPermissionState(LOCATION))
+            call.resolve(permissions)
+        } catch (exception: JSONException) {
+            val message = exception.message
+            Log.e(TAG, message!!)
+            call.reject(message)
+        }
+    }
+
+    @Throws(JSONException::class)
+    private fun getGrantedPermissions(requestedPermissions: JSArray): JSObject {
+        val response = JSObject()
+        for (i in 0 until requestedPermissions.length()) {
+            val alias = requestedPermissions[i] as String
+            response.put(alias, PermissionState.GRANTED)
+        }
+        return response
+    }
+
+    @PermissionCallback
+    private fun connectPermissionCallback(call: PluginCall) {
+        if (getPermissionState(CONNECT) == PermissionState.GRANTED) {
+            when (call.methodName) {
+                "enable" -> enableBluetooth(call)
+                "list" -> listPairedDevices(call)
+                "connect" -> connectToDevice(call)
+            }
+        } else {
+            call.reject("Connect permission denied")
+        }
+    }
+
+    @PermissionCallback
+    private fun scanPermissionCallback(call: PluginCall) {
+        if (getPermissionState(SCAN) == PermissionState.GRANTED) {
+            when (call.methodName) {
+                "discoverUnpaired" -> startDiscovery(call)
+                "cancelDiscovery" -> cancelDiscovery(call)
+            }
+        } else {
+            call.reject("Scan permission denied")
+        }
+    }
+
+    private fun rejectIfBluetoothDisabled(call: PluginCall): Boolean {
+        val isEnabled = implementation.isEnabled
+        if (!isEnabled) {
+            call.reject("Bluetooth is not enabled")
+            return true
+        }
+        return false
     }
 
     override fun handleOnDestroy() {
