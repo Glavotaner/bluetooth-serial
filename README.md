@@ -26,7 +26,8 @@ npx cap sync
 * [`settings()`](#settings)
 * [`list()`](#list)
 * [`discoverUnpaired()`](#discoverunpaired)
-* [`checkPermissions(...)`](#checkpermissions)
+* [`cancelDiscovery()`](#canceldiscovery)
+* [`checkPermissions()`](#checkpermissions)
 * [`requestPermissions(...)`](#requestpermissions)
 * [`addListener('discoverUnpaired', ...)`](#addlistenerdiscoverunpaired)
 * [`addListener('connectionChange', ...)`](#addlistenerconnectionchange)
@@ -58,14 +59,16 @@ echo(options: { value: string; }) => Promise<{ value: string; }>
 ### connect(...)
 
 ```typescript
-connect(options: { address: string; }) => Promise<BluetoothDevice>
+connect(options: { address: string; secure?: boolean; }) => Promise<void>
 ```
 
-| Param         | Type                              |
-| ------------- | --------------------------------- |
-| **`options`** | <code>{ address: string; }</code> |
+Connects to the bluetooth device with the given address.
+The plugin only retains one connection at a time; upon connecting to a device, while there is already an existing connection,
+the previous device is disconnected.
 
-**Returns:** <code>Promise&lt;<a href="#bluetoothdevice">BluetoothDevice</a>&gt;</code>
+| Param         | Type                                                |
+| ------------- | --------------------------------------------------- |
+| **`options`** | <code>{ address: string; secure?: boolean; }</code> |
 
 --------------------
 
@@ -76,6 +79,9 @@ connect(options: { address: string; }) => Promise<BluetoothDevice>
 disconnect() => Promise<void>
 ```
 
+Disconnects from the currently connected device.
+This may be called while there is no connected device; in that case, the method will resolve with void.
+
 --------------------
 
 
@@ -84,6 +90,8 @@ disconnect() => Promise<void>
 ```typescript
 read() => Promise<{ data: string; }>
 ```
+
+Returns data emitted from the currently connected device.
 
 **Returns:** <code>Promise&lt;{ data: string; }&gt;</code>
 
@@ -96,6 +104,8 @@ read() => Promise<{ data: string; }>
 write(options: { data: string; }) => Promise<void>
 ```
 
+Writes data to the currently connected device.
+
 | Param         | Type                           |
 | ------------- | ------------------------------ |
 | **`options`** | <code>{ data: string; }</code> |
@@ -106,10 +116,12 @@ write(options: { data: string; }) => Promise<void>
 ### available()
 
 ```typescript
-available() => Promise<boolean>
+available() => Promise<{ available: number; }>
 ```
 
-**Returns:** <code>Promise&lt;boolean&gt;</code>
+Returns the length of the data that can be read by calling read().
+
+**Returns:** <code>Promise&lt;{ available: number; }&gt;</code>
 
 --------------------
 
@@ -117,10 +129,12 @@ available() => Promise<boolean>
 ### isEnabled()
 
 ```typescript
-isEnabled() => Promise<boolean>
+isEnabled() => Promise<{ isEnabled: boolean; }>
 ```
 
-**Returns:** <code>Promise&lt;boolean&gt;</code>
+Returns true or false depending on whether bluetooth is enabled.
+
+**Returns:** <code>Promise&lt;{ isEnabled: boolean; }&gt;</code>
 
 --------------------
 
@@ -128,10 +142,12 @@ isEnabled() => Promise<boolean>
 ### isConnected()
 
 ```typescript
-isConnected() => Promise<boolean>
+isConnected() => Promise<{ isConnected: boolean; }>
 ```
 
-**Returns:** <code>Promise&lt;boolean&gt;</code>
+Returns true or false depending on whether the plugin is currently connected to a device.
+
+**Returns:** <code>Promise&lt;{ isConnected: boolean; }&gt;</code>
 
 --------------------
 
@@ -142,6 +158,8 @@ isConnected() => Promise<boolean>
 clear() => Promise<void>
 ```
 
+Clears the data readable by calling read().
+
 --------------------
 
 
@@ -150,6 +168,8 @@ clear() => Promise<void>
 ```typescript
 enable() => Promise<{ isEnabled: boolean; }>
 ```
+
+Displays the native prompt for enabling bluetooth. Returns true or false depending on whether the user enabled bluetooth.
 
 **Returns:** <code>Promise&lt;{ isEnabled: boolean; }&gt;</code>
 
@@ -162,6 +182,8 @@ enable() => Promise<{ isEnabled: boolean; }>
 settings() => Promise<void>
 ```
 
+Opens the native bluetooth settings activity. Resolves immediately upon being called.
+
 --------------------
 
 
@@ -170,6 +192,8 @@ settings() => Promise<void>
 ```typescript
 list() => Promise<devices>
 ```
+
+Returns a list of bonded <a href="#devices">devices</a>. This includes <a href="#devices">devices</a> that were previously paired with the user's device
 
 **Returns:** <code>Promise&lt;<a href="#devices">devices</a>&gt;</code>
 
@@ -182,20 +206,34 @@ list() => Promise<devices>
 discoverUnpaired() => Promise<devices>
 ```
 
+Begins the discovery of nearby <a href="#devices">devices</a> and resolves with them once discovery is finished.
+There may only be one discovery process at a time.
+
 **Returns:** <code>Promise&lt;<a href="#devices">devices</a>&gt;</code>
 
 --------------------
 
 
-### checkPermissions(...)
+### cancelDiscovery()
 
 ```typescript
-checkPermissions(options: { permissions: permissions[]; }) => Promise<PermissionStatus[]>
+cancelDiscovery() => Promise<void>
 ```
 
-| Param         | Type                                                                    |
-| ------------- | ----------------------------------------------------------------------- |
-| **`options`** | <code>{ <a href="#permissions">permissions</a>: permissions[]; }</code> |
+Cancels current unpaired <a href="#devices">devices</a> discovery, if there is one in progress. If there is no discovery in progress, resolves with void.
+Be sure to note that calling this will reject any existing discoverUnpaired() call which hasn't resolved yet.
+
+--------------------
+
+
+### checkPermissions()
+
+```typescript
+checkPermissions() => Promise<PermissionStatus[]>
+```
+
+Takes into account the fact that SCAN and CONNECT <a href="#permissions">permissions</a> only exist on Android 11+; those <a href="#permissions">permissions</a> will always resolve as GRANTED
+on <a href="#devices">devices</a> below Android 11.
 
 **Returns:** <code>Promise&lt;PermissionStatus[]&gt;</code>
 
@@ -207,6 +245,9 @@ checkPermissions(options: { permissions: permissions[]; }) => Promise<Permission
 ```typescript
 requestPermissions(options: { permissions: permissions[]; }) => Promise<PermissionStatus[]>
 ```
+
+Takes into account the fact that SCAN and CONNECT <a href="#permissions">permissions</a> only exist on Android 11+; those <a href="#permissions">permissions</a> will always resolve as GRANTED
+on <a href="#devices">devices</a> below Android 11.
 
 | Param         | Type                                                                    |
 | ------------- | ----------------------------------------------------------------------- |
@@ -220,13 +261,13 @@ requestPermissions(options: { permissions: permissions[]; }) => Promise<Permissi
 ### addListener('discoverUnpaired', ...)
 
 ```typescript
-addListener(event: 'discoverUnpaired', listenerFunc: discoverUnpairedCallback) => Promise<PluginListenerHandle> & PluginListenerHandle
+addListener(event: 'discoverUnpaired', listenerFunc: (event: devices) => any) => Promise<PluginListenerHandle> & PluginListenerHandle
 ```
 
-| Param              | Type                                                                          |
-| ------------------ | ----------------------------------------------------------------------------- |
-| **`event`**        | <code>'discoverUnpaired'</code>                                               |
-| **`listenerFunc`** | <code><a href="#discoverunpairedcallback">discoverUnpairedCallback</a></code> |
+| Param              | Type                                                           |
+| ------------------ | -------------------------------------------------------------- |
+| **`event`**        | <code>'discoverUnpaired'</code>                                |
+| **`listenerFunc`** | <code>(event: <a href="#devices">devices</a>) =&gt; any</code> |
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt; & <a href="#pluginlistenerhandle">PluginListenerHandle</a></code>
 
@@ -236,13 +277,13 @@ addListener(event: 'discoverUnpaired', listenerFunc: discoverUnpairedCallback) =
 ### addListener('connectionChange', ...)
 
 ```typescript
-addListener(event: 'connectionChange', listenerFunc: connectionChangeCallback) => Promise<PluginListenerHandle> & PluginListenerHandle
+addListener(event: 'connectionChange', listenerFunc: (event: { state: ConnectionState; }) => any) => Promise<PluginListenerHandle> & PluginListenerHandle
 ```
 
-| Param              | Type                                                                          |
-| ------------------ | ----------------------------------------------------------------------------- |
-| **`event`**        | <code>'connectionChange'</code>                                               |
-| **`listenerFunc`** | <code><a href="#connectionchangecallback">connectionChangeCallback</a></code> |
+| Param              | Type                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------ |
+| **`event`**        | <code>'connectionChange'</code>                                                            |
+| **`listenerFunc`** | <code>(event: { state: <a href="#connectionstate">ConnectionState</a>; }) =&gt; any</code> |
 
 **Returns:** <code>Promise&lt;<a href="#pluginlistenerhandle">PluginListenerHandle</a>&gt; & <a href="#pluginlistenerhandle">PluginListenerHandle</a></code>
 
@@ -267,7 +308,7 @@ removeAllListeners() => Promise<void>
 | ------------- | ------------------- |
 | **`address`** | <code>string</code> |
 | **`name`**    | <code>string</code> |
-| **`class`**   | <code>string</code> |
+| **`class`**   | <code>number</code> |
 
 
 #### PluginListenerHandle
@@ -287,7 +328,7 @@ removeAllListeners() => Promise<void>
 
 #### PermissionStatus
 
-<code>{ [permission in permissions]: <a href="#permissionstate">PermissionState</a> }</code>
+<code>{ [permission in permissions]?: <a href="#permissionstate">PermissionState</a> }</code>
 
 
 #### permissions
@@ -298,16 +339,6 @@ removeAllListeners() => Promise<void>
 #### PermissionState
 
 <code>'prompt' | 'prompt-with-rationale' | 'granted' | 'denied'</code>
-
-
-#### discoverUnpairedCallback
-
-<code>(event: <a href="#devices">devices</a>): any</code>
-
-
-#### connectionChangeCallback
-
-<code>(event: { state: <a href="#connectionstate">ConnectionState</a>; }): any</code>
 
 
 ### Enums
