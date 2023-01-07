@@ -61,11 +61,40 @@ class BluetoothSerial(
             sendStateToPlugin(state)
         }
 
-    @Synchronized
     fun resetService() {
         if (D) Log.d(TAG, "start")
         closeConnection()
         state = ConnectionState.NONE
+    }
+
+    // connect
+    @SuppressLint("MissingPermission")
+    suspend fun connect(device: BluetoothDevice) {
+        if (D) Log.d(TAG, "connect to: $device")
+        connectToSocketOfType("secure") {
+            device.createRfcommSocketToServiceRecord(UUID_SPP)
+        }
+    }
+
+    // connect
+    @SuppressLint("MissingPermission")
+    suspend fun connectInsecure(device: BluetoothDevice) {
+        if (D) Log.d(TAG, "connect to: $device")
+        connectToSocketOfType("insecure") {
+            device.createInsecureRfcommSocketToServiceRecord(UUID_SPP)
+        }
+    }
+
+    private suspend fun connectToSocketOfType(socketType: String, createSocket: () -> BluetoothSocket) {
+        withContext(Dispatchers.IO) {
+            try {
+                val socket = createSocket()
+                connect(socket, socketType)
+            } catch (e: IOException) {
+                Log.e(TAG, "Socket Type: $socketType create() failed", e)
+                sendConnectionErrorToPlugin(e.message!!)
+            }
+        }
     }
 
     private suspend fun connect(socket: BluetoothSocket, socketType: String) {
@@ -89,36 +118,6 @@ class BluetoothSerial(
                 Log.e(TAG, e.toString())
                 sendConnectionErrorToPlugin(e.message ?: "Unable to connect")
                 resetService()
-            }
-        }
-    }
-
-    // connect
-    @SuppressLint("MissingPermission")
-    suspend fun connect(device: BluetoothDevice) {
-        if (D) Log.d(TAG, "connect to: $device")
-        connectToSocketOfType("secure") {
-            device.createRfcommSocketToServiceRecord(UUID_SPP)
-        }
-    }
-
-    // connect
-    @SuppressLint("MissingPermission")
-    suspend fun connectInsecure(device: BluetoothDevice) {
-        if (D) Log.d(TAG, "connect to: $device")
-        connectToSocketOfType("insecure") {
-            device.createInsecureRfcommSocketToServiceRecord(UUID_SPP)
-        }
-    }
-
-    private suspend fun connectToSocketOfType(socketType: String, socketCreator: () -> BluetoothSocket) {
-        withContext(Dispatchers.IO) {
-            try {
-                val socket = socketCreator()
-                connect(socket, socketType)
-            } catch (e: IOException) {
-                Log.e(TAG, "Socket Type: $socketType create() failed", e)
-                sendConnectionErrorToPlugin(e.message!!)
             }
         }
     }
