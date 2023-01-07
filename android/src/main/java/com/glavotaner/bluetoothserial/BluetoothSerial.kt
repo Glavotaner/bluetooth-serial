@@ -124,6 +124,7 @@ class BluetoothSerial(
     }
 
     private fun sendConnectionErrorToPlugin(error: String) {
+        mState = ConnectionState.NONE
         val bundle = Bundle().apply {
             putInt("state", ConnectionState.NONE.value())
             putString("error", error)
