@@ -155,14 +155,14 @@ class BluetoothSerial(
         connectionHandler.obtainMessage(status).apply { data = bundle }.sendToTarget()
     }
 
-    private inner class ConnectedDevice(socket: BluetoothSocket?, socketType: String) {
-        private val mmSocket: BluetoothSocket?
+    private inner class ConnectedDevice(socket: BluetoothSocket, socketType: String) {
+        private val mmSocket: BluetoothSocket
         private val mmInStream: InputStream?
         private val mmOutStream: OutputStream?
 
         fun disconnect() {
             try {
-                mmSocket!!.close()
+                mmSocket.close()
             } catch(error: IOException) {
                 Log.e(TAG, "could not close socket ${error.message ?: ""}")
             }
@@ -211,18 +211,17 @@ class BluetoothSerial(
         init {
             Log.d(TAG, "create ConnectedThread: $socketType")
             mmSocket = socket
-            var tmpIn: InputStream? = null
-            var tmpOut: OutputStream? = null
-            // Get the BluetoothSocket input and output streams
+            var inStream: InputStream? = null
+            var outStream: OutputStream? = null
             try {
-                tmpIn = socket!!.inputStream
-                tmpOut = socket.outputStream
+                inStream = socket.inputStream
+                outStream = socket.outputStream
                 mState = ConnectionState.CONNECTED
             } catch (e: IOException) {
                 handleConnectionError(e.message ?: "Could not get streams")
             }
-            mmInStream = tmpIn
-            mmOutStream = tmpOut
+            mmInStream = inStream
+            mmOutStream = outStream
         }
     }
 
