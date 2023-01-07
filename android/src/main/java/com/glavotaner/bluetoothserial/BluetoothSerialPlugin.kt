@@ -243,6 +243,7 @@ class BluetoothSerialPlugin : Plugin() {
                 } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED == action) {
                     call.resolve(result)
                     activity.unregisterReceiver(this)
+                    discoveryCall = null
                 }
             }
         }
