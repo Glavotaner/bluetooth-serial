@@ -115,9 +115,7 @@ class BluetoothSerial(
                     mConnectedDevice!!.read()
                 }
             } catch (e: IOException) {
-                Log.e(TAG, e.toString())
-                sendConnectionErrorToPlugin(e.message ?: "Unable to connect")
-                resetService()
+                handleConnectionError(e.message ?: "Unable to connect")
             }
         }
     }
@@ -187,9 +185,7 @@ class BluetoothSerial(
                     // Send the new data String to the UI Activity
                     sendReadData(data)
                 } catch (e: IOException) {
-                    Log.e(TAG, "disconnected", e)
-                    sendConnectionErrorToPlugin("Device connection was lost")
-                    resetService()
+                    handleConnectionError("Device connection was lost")
                     break
                 }
             }
@@ -223,15 +219,12 @@ class BluetoothSerial(
                 tmpOut = socket.outputStream
                 mState = ConnectionState.CONNECTED
             } catch (e: IOException) {
-                Log.e(TAG, "temp sockets not created", e)
-                sendConnectionErrorToPlugin(e.message ?: "Could not get streams")
-                resetService()
+                handleConnectionError(e.message ?: "Could not get streams")
             }
             mmInStream = tmpIn
             mmOutStream = tmpOut
         }
     }
-
 
     private fun sendReadData(data: String) {
         readHandler.obtainMessage(SUCCESS).apply {
@@ -242,6 +235,12 @@ class BluetoothSerial(
     private fun closeConnection() {
         mConnectedDevice?.disconnect()
         mConnectedDevice = null
+    }
+
+    private fun handleConnectionError(message: String) {
+        Log.e(TAG, message)
+        sendConnectionErrorToPlugin(message)
+        resetService()
     }
 
     companion object {
