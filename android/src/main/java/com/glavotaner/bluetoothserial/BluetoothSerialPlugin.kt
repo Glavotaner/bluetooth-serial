@@ -110,12 +110,9 @@ class BluetoothSerialPlugin : Plugin() {
         val device = implementation.getRemoteDevice(macAddress)
         if (device != null) {
             connectCall = call
-            val secureConnection = call.getBoolean("secure")
-            if (secureConnection == true) {
-                implementation.connect(device)
-            } else {
-                implementation.connectInsecure(device)
-            }
+            val secureConnection = call.getBoolean("secure") ?: false
+            if (secureConnection) implementation.connect(device)
+            else implementation.connectInsecure(device)
             buffer.setLength(0)
         } else {
             call.reject("Could not connect to $macAddress")
@@ -233,17 +230,19 @@ class BluetoothSerialPlugin : Plugin() {
             private val unpairedDevices = JSONArray()
             private val result = JSObject().put("devices", unpairedDevices)
             override fun onReceive(context: Context, intent: Intent) {
-                val action = intent.action
-                if (BluetoothDevice.ACTION_FOUND == action) {
-                    val device =
-                        intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-                    unpairedDevices.put(deviceToJSON(device!!))
-                    result.put("devices", unpairedDevices)
-                    notifyListeners("discoverUnpaired", result)
-                } else if (BluetoothAdapter.ACTION_DISCOVERY_FINISHED == action) {
-                    call.resolve(result)
-                    activity.unregisterReceiver(this)
-                    discoveryCall = null
+                when (intent.action) {
+                    BluetoothDevice.ACTION_FOUND -> {
+                        val device =
+                            intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                        unpairedDevices.put(deviceToJSON(device!!))
+                        result.put("devices", unpairedDevices)
+                        notifyListeners("discoverUnpaired", result)
+                    }
+                    else -> {
+                        call.resolve(result)
+                        activity.unregisterReceiver(this)
+                        discoveryCall = null
+                    }
                 }
             }
         }

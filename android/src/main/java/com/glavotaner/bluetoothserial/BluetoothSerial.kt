@@ -9,9 +9,7 @@ import android.os.Handler
 import android.util.Log
 import com.glavotaner.bluetoothserial.Message.ERROR
 import com.glavotaner.bluetoothserial.Message.SUCCESS
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -25,6 +23,7 @@ class BluetoothSerial(
 ) {
     // Member fields
     private var mConnectedDevice: ConnectedDevice? = null
+    private var mConnectJob: Job? = null
     private var mState: ConnectionState
     fun echo(value: String): String {
         return value
@@ -87,6 +86,7 @@ class BluetoothSerial(
 
     private suspend fun connectToSocketOfType(socketType: String, createSocket: () -> BluetoothSocket?) {
         try {
+            closeConnection()
             val socket = createSocket()
             if (socket != null) connect(socket, socketType)
             else sendConnectionErrorToPlugin("Could not connect")
@@ -101,21 +101,23 @@ class BluetoothSerial(
         // Always cancel discovery because it will slow down a connection
         mAdapter.cancelDiscovery()
         mState = ConnectionState.CONNECTING
+        mConnectJob?.cancel()
         Log.i(TAG, "Connecting to socket...")
         withContext(Dispatchers.IO) {
-            try {
-                // This is a blocking call and will only return on a successful connection or an exception
-                @Suppress("BlockingMethodInNonBlockingContext")
-                socket.connect()
-                if (D) Log.d(TAG, "connected, Socket Type:$socketType")
-                closeConnection()
-                mConnectedDevice = ConnectedDevice(socket, socketType)
-                if (mState === ConnectionState.CONNECTED) {
-                    Log.i(TAG, "Connected")
-                    mConnectedDevice!!.read()
+            mConnectJob = launch {
+                try {
+                    // This is a blocking call and will only return on a successful connection or an exception
+                    @Suppress("BlockingMethodInNonBlockingContext")
+                    socket.connect()
+                    if (D) Log.d(TAG, "connected, Socket Type:$socketType")
+                    mConnectedDevice = ConnectedDevice(socket, socketType)
+                    if (mState === ConnectionState.CONNECTED) {
+                        Log.i(TAG, "Connected")
+                        mConnectedDevice!!.read()
+                    }
+                } catch (e: IOException) {
+                    handleConnectionError(e.message ?: "Unable to connect")
                 }
-            } catch (e: IOException) {
-                handleConnectionError(e.message ?: "Unable to connect")
             }
         }
     }
@@ -232,6 +234,7 @@ class BluetoothSerial(
     }
 
     private fun closeConnection() {
+        mConnectJob?.cancel()
         mConnectedDevice?.disconnect()
         mConnectedDevice = null
     }
