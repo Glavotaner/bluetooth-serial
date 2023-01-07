@@ -98,11 +98,8 @@ class BluetoothSerialPlugin : Plugin() {
     @PluginMethod
     suspend fun connect(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
-        if (hasCompatPermission(CONNECT)) {
-            connectToDevice(call)
-        } else {
-            requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
-        }
+        if (hasCompatPermission(CONNECT)) connectToDevice(call)
+        else requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
     }
 
     private suspend fun connectToDevice(call: PluginCall) {
@@ -176,11 +173,8 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     fun enable(call: PluginCall) {
-        if (hasCompatPermission(CONNECT)) {
-            enableBluetooth(call)
-        } else {
-            requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
-        }
+        if (hasCompatPermission(CONNECT)) enableBluetooth(call)
+        else requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
     }
 
     private fun enableBluetooth(call: PluginCall) {
@@ -198,11 +192,8 @@ class BluetoothSerialPlugin : Plugin() {
     @PluginMethod
     fun list(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
-        if (hasCompatPermission(CONNECT)) {
-            listPairedDevices(call)
-        } else {
-            requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
-        }
+        if (hasCompatPermission(CONNECT)) listPairedDevices(call)
+        else requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
     }
 
     @SuppressLint("MissingPermission")
@@ -215,11 +206,8 @@ class BluetoothSerialPlugin : Plugin() {
     @PluginMethod
     fun discoverUnpaired(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
-        if (hasCompatPermission(SCAN)) {
-            startDiscovery(call)
-        } else {
-            requestPermissionForAlias(SCAN, call, "scanPermissionCallback")
-        }
+        if (hasCompatPermission(SCAN)) startDiscovery(call)
+        else requestPermissionForAlias(SCAN, call, "scanPermissionCallback")
     }
 
     @SuppressLint("MissingPermission")
@@ -276,11 +264,8 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     override fun checkPermissions(call: PluginCall) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            super.checkPermissions(call)
-        } else {
-            checkCompatPermissions(call)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) super.checkPermissions(call)
+        else checkCompatPermissions(call)
     }
 
     private fun checkCompatPermissions(call: PluginCall) {
@@ -294,11 +279,8 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     override fun requestPermissions(call: PluginCall) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            super.requestPermissions(call)
-        } else {
-            requestCompatPermissions(call)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) super.requestPermissions(call)
+         else requestCompatPermissions(call)
     }
 
     /*
@@ -388,11 +370,10 @@ class BluetoothSerialPlugin : Plugin() {
     }
 
     private fun hasCompatPermission(alias: String): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
             getPermissionState(alias) == PermissionState.GRANTED
-        } else {
+         else
             true
-        }
 
     companion object {
         // Debugging
