@@ -221,6 +221,7 @@ class BluetoothSerial(
                 mState = ConnectionState.CONNECTED
             } catch (e: IOException) {
                 handleConnectionError(e.message ?: "Could not get streams")
+                mConnectJob?.cancel()
             }
             mmInStream = inStream
             mmOutStream = outStream
