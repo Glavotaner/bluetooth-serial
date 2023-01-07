@@ -96,7 +96,7 @@ class BluetoothSerialPlugin : Plugin() {
     }
 
     @PluginMethod
-    fun connect(call: PluginCall) {
+    suspend fun connect(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
         if (hasCompatPermission(CONNECT)) {
             connectToDevice(call)
@@ -105,7 +105,7 @@ class BluetoothSerialPlugin : Plugin() {
         }
     }
 
-    private fun connectToDevice(call: PluginCall) {
+    private suspend fun connectToDevice(call: PluginCall) {
         val macAddress = call.getString("address")
         val device = implementation.getRemoteDevice(macAddress)
         if (device != null) {
@@ -130,7 +130,7 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     @Throws(JSONException::class)
-    fun write(call: PluginCall) {
+    suspend fun write(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
         val data = (call.data["data"] as String).toByteArray()
         writeCall = call
@@ -350,7 +350,7 @@ class BluetoothSerialPlugin : Plugin() {
     }
 
     @PermissionCallback
-    private fun connectPermissionCallback(call: PluginCall) {
+    private suspend fun connectPermissionCallback(call: PluginCall) {
         if (getPermissionState(CONNECT) == PermissionState.GRANTED) {
             when (call.methodName) {
                 "enable" -> enableBluetooth(call)
