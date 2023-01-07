@@ -85,15 +85,14 @@ class BluetoothSerial(
         }
     }
 
-    private suspend fun connectToSocketOfType(socketType: String, createSocket: () -> BluetoothSocket) {
-        withContext(Dispatchers.IO) {
-            try {
-                val socket = createSocket()
-                connect(socket, socketType)
-            } catch (e: IOException) {
-                Log.e(TAG, "Socket Type: $socketType create() failed", e)
-                sendConnectionErrorToPlugin(e.message!!)
-            }
+    private suspend fun connectToSocketOfType(socketType: String, createSocket: () -> BluetoothSocket?) {
+        try {
+            val socket = createSocket()
+            if (socket != null) connect(socket, socketType)
+            else sendConnectionErrorToPlugin("Could not connect")
+        } catch (e: IOException) {
+            Log.e(TAG, "Socket Type: $socketType create() failed", e)
+            sendConnectionErrorToPlugin(e.message!!)
         }
     }
 
@@ -102,10 +101,11 @@ class BluetoothSerial(
         // Always cancel discovery because it will slow down a connection
         mAdapter.cancelDiscovery()
         mState = ConnectionState.CONNECTING
+        Log.i(TAG, "Connecting to socket...")
         withContext(Dispatchers.IO) {
             try {
-                Log.i(TAG, "Connecting to socket...")
                 // This is a blocking call and will only return on a successful connection or an exception
+                @Suppress("BlockingMethodInNonBlockingContext")
                 socket.connect()
                 if (D) Log.d(TAG, "connected, Socket Type:$socketType")
                 closeConnection()
