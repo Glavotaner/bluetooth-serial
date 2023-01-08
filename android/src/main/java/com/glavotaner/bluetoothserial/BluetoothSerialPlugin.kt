@@ -66,8 +66,7 @@ class BluetoothSerialPlugin : Plugin() {
                     connectCall = null
                 }
                 if (connectionState === ConnectionState.NONE) connectCall = null
-            }
-            else if (connectCall != null) {
+            } else if (connectCall != null) {
                 val error = data.getString("error")
                 connectCall!!.reject(error)
                 connectCall = null
@@ -231,19 +230,27 @@ class BluetoothSerialPlugin : Plugin() {
             override fun onReceive(context: Context, intent: Intent) {
                 when (intent.action) {
                     BluetoothDevice.ACTION_FOUND -> {
-                        val device =
-                            intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                        val device = getDeviceFromIntent(intent)
                         unpairedDevices.put(deviceToJSON(device!!))
                         result.put("devices", unpairedDevices)
                         notifyListeners("discoverUnpaired", result)
                     }
-                    else -> {
+                    BluetoothAdapter.ACTION_DISCOVERY_FINISHED -> {
                         call.resolve(result)
                         activity.unregisterReceiver(this)
                         discoveryCall = null
                     }
                 }
             }
+
+            @Suppress("DEPRECATION")
+            private fun getDeviceFromIntent(intent: Intent) =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                    intent.getParcelableExtra(
+                        BluetoothDevice.EXTRA_DEVICE,
+                        BluetoothDevice::class.java
+                    )
+                else intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
         }
         val filter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_FOUND)
@@ -291,7 +298,7 @@ class BluetoothSerialPlugin : Plugin() {
     @PluginMethod
     override fun requestPermissions(call: PluginCall) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) super.requestPermissions(call)
-         else requestCompatPermissions(call)
+        else requestCompatPermissions(call)
     }
 
     /*
@@ -383,7 +390,7 @@ class BluetoothSerialPlugin : Plugin() {
     private fun hasCompatPermission(alias: String): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R)
             getPermissionState(alias) == PermissionState.GRANTED
-         else
+        else
             true
 
     @SuppressLint("MissingPermission")
