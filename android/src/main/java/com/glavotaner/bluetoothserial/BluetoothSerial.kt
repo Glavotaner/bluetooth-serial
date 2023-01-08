@@ -15,6 +15,13 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.*
 
+// Debugging
+private const val TAG = "BluetoothSerialService"
+private const val D = true
+
+// Well known SPP UUID
+private val UUID_SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
+
 class BluetoothSerial(
     private val mAdapter: BluetoothAdapter,
     private val connectionHandler: Handler,
@@ -244,15 +251,6 @@ class BluetoothSerial(
         Log.e(TAG, message)
         sendConnectionErrorToPlugin(message)
         resetService()
-    }
-
-    companion object {
-        // Debugging
-        private const val TAG = "BluetoothSerialService"
-        private const val D = true
-
-        // Well known SPP UUID
-        private val UUID_SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 
     init {

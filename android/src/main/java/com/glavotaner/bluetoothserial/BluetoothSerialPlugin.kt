@@ -24,19 +24,24 @@ import com.getcapacitor.annotation.PermissionCallback
 import org.json.JSONArray
 import org.json.JSONException
 
+// Debugging
+private const val TAG = "BluetoothSerial"
+const val CONNECT = "connect"
+const val SCAN = "scan"
+const val LOCATION = "location"
 
 @SuppressLint("InlinedApi")
 @CapacitorPlugin(
     name = "BluetoothSerial",
     permissions = [Permission(
         strings = [Manifest.permission.BLUETOOTH_SCAN],
-        alias = BluetoothSerialPlugin.SCAN
+        alias = SCAN
     ), Permission(
         strings = [Manifest.permission.BLUETOOTH_CONNECT],
-        alias = BluetoothSerialPlugin.CONNECT
+        alias = CONNECT
     ), Permission(
         strings = [Manifest.permission.ACCESS_COARSE_LOCATION],
-        alias = BluetoothSerialPlugin.LOCATION
+        alias = LOCATION
     )]
 )
 class BluetoothSerialPlugin : Plugin() {
@@ -375,19 +380,10 @@ class BluetoothSerialPlugin : Plugin() {
          else
             true
 
-    companion object {
-        // Debugging
-        private const val TAG = "BluetoothSerial"
-        const val CONNECT = "connect"
-        const val SCAN = "scan"
-        const val LOCATION = "location"
+    @SuppressLint("MissingPermission")
+    private fun deviceToJSON(device: BluetoothDevice): JSObject = JSObject()
+        .put("name", device.name)
+        .put("address", device.address)
+        .put("deviceClass", device.bluetoothClass?.deviceClass ?: JSObject.NULL)
 
-        @SuppressLint("MissingPermission")
-        fun deviceToJSON(device: BluetoothDevice): JSObject {
-            return JSObject()
-                .put("name", device.name)
-                .put("address", device.address)
-                .put("deviceClass", device.bluetoothClass?.deviceClass ?: JSObject.NULL)
-        }
-    }
 }
