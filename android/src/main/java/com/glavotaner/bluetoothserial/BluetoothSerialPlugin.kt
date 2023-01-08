@@ -23,6 +23,7 @@ import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
 import org.json.JSONArray
 import org.json.JSONException
+import java.lang.IllegalArgumentException
 
 // Debugging
 private const val TAG = "BluetoothSerial"
@@ -109,15 +110,20 @@ class BluetoothSerialPlugin : Plugin() {
 
     private suspend fun connectToDevice(call: PluginCall) {
         val macAddress = call.getString("address")
-        val device = implementation.getRemoteDevice(macAddress)
-        if (device != null) {
-            connectCall = call
-            val secureConnection = call.getBoolean("secure") ?: false
-            if (secureConnection) implementation.connect(device)
-            else implementation.connectInsecure(device)
-            buffer.setLength(0)
-        } else {
-            call.reject("Could not connect to $macAddress")
+        try {
+            val device = implementation.getRemoteDevice(macAddress)
+            if (device != null) {
+                connectCall = call
+                val secureConnection = call.getBoolean("secure") ?: false
+                if (secureConnection) implementation.connect(device)
+                else implementation.connectInsecure(device)
+                buffer.setLength(0)
+            } else {
+                call.reject("Could not connect to $macAddress")
+            }
+        } catch (error: IllegalArgumentException) {
+            // most likely invalid mac
+            call.reject(error.message)
         }
     }
 
