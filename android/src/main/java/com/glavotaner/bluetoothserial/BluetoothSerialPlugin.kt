@@ -102,20 +102,27 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     suspend fun connect(call: PluginCall) {
+        connect(call) { device -> implementation.connect(device) }
+    }
+
+    @PluginMethod
+    suspend fun connectInsecure(call: PluginCall) {
+        connect(call) { device -> implementation.connectInsecure(device) }
+    }
+
+    private suspend fun connect(call: PluginCall, connect: suspend (BluetoothDevice) -> Unit) {
         if (rejectIfBluetoothDisabled(call)) return
-        if (hasCompatPermission(CONNECT)) connectToDevice(call)
+        if (hasCompatPermission(CONNECT)) connectToDevice(call, connect)
         else requestConnectPermission(call)
     }
 
-    private suspend fun connectToDevice(call: PluginCall) {
+    private suspend fun connectToDevice(call: PluginCall, connect: suspend (BluetoothDevice) -> Unit) {
         val macAddress = call.getString("address")
         try {
             val device = implementation.getRemoteDevice(macAddress)
             if (device != null) {
                 connectCall = call
-                val secureConnection = call.getBoolean("secure") ?: false
-                if (secureConnection) implementation.connect(device)
-                else implementation.connectInsecure(device)
+                connect(device)
                 buffer.setLength(0)
             } else {
                 call.reject("Could not connect to $macAddress")
@@ -354,7 +361,8 @@ class BluetoothSerialPlugin : Plugin() {
             when (call.methodName) {
                 "enable" -> enableBluetooth(call)
                 "list" -> listPairedDevices(call)
-                "connect" -> connectToDevice(call)
+                "connect" -> connect(call)
+                "connectInsecure" -> connectInsecure(call)
             }
         } else {
             call.reject("Connect permission denied")
