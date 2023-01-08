@@ -124,6 +124,12 @@ class BluetoothSerial(
                     }
                 } catch (e: IOException) {
                     handleConnectionError(e.message ?: "Unable to connect")
+                    try {
+                        @Suppress("BlockingMethodInNonBlockingContext")
+                        socket.close()
+                    } catch(error: IOException) {
+                        Log.e(TAG, "Could not close socket ${error.message ?: ""}")
+                    }
                 }
             }
         }
