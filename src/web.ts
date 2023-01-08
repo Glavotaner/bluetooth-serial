@@ -9,6 +9,9 @@ export class BluetoothSerialWeb
   connect(_options: { address: string; }): Promise<void> {
     throw new Error('Method not implemented.');
   }
+  connectInsecure(_options: { address: string; }): Promise<void> {
+    throw new Error('Method not implemented.');
+  }
   disconnect(): Promise<void> {
     throw new Error('Method not implemented.');
   }

@@ -7,7 +7,13 @@ export interface BluetoothSerialPlugin {
    * The plugin only retains one connection at a time; upon connecting to a device, while there is already an existing connection,
    * the previous device is disconnected.
    */
-  connect(options: { address: string, secure?: boolean }): Promise<void>;
+  connect(options: connectionOptions): Promise<void>;
+  /**
+   * Connects to the bluetooth device with the given address.
+   * The plugin only retains one connection at a time; upon connecting to a device, while there is already an existing connection,
+   * the previous device is disconnected.
+   */
+  connectInsecure(options: connectionOptions): Promise<void>;
   /**
    * Disconnects from the currently connected device.
    * This may be called while there is no connected device; in that case, the method will resolve with void.
@@ -89,3 +95,4 @@ export type devices = { devices: BluetoothDevice[] };
 export enum ConnectionState {
   NONE, CONNECTING, CONNECTED,
 }
+type connectionOptions = { address: string };
