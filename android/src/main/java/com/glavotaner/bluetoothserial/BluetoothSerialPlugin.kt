@@ -104,7 +104,7 @@ class BluetoothSerialPlugin : Plugin() {
     suspend fun connect(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
         if (hasCompatPermission(CONNECT)) connectToDevice(call)
-        else requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
+        else requestConnectPermission(call)
     }
 
     private suspend fun connectToDevice(call: PluginCall) {
@@ -184,7 +184,7 @@ class BluetoothSerialPlugin : Plugin() {
     @PluginMethod
     fun enable(call: PluginCall) {
         if (hasCompatPermission(CONNECT)) enableBluetooth(call)
-        else requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
+        else requestConnectPermission(call)
     }
 
     private fun enableBluetooth(call: PluginCall) {
@@ -203,7 +203,7 @@ class BluetoothSerialPlugin : Plugin() {
     fun list(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
         if (hasCompatPermission(CONNECT)) listPairedDevices(call)
-        else requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
+        else requestConnectPermission(call)
     }
 
     @SuppressLint("MissingPermission")
@@ -217,7 +217,7 @@ class BluetoothSerialPlugin : Plugin() {
     fun discoverUnpaired(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
         if (hasCompatPermission(SCAN)) startDiscovery(call)
-        else requestPermissionForAlias(SCAN, call, "scanPermissionCallback")
+        else requestScanPermission(call)
     }
 
     @SuppressLint("MissingPermission")
@@ -266,7 +266,7 @@ class BluetoothSerialPlugin : Plugin() {
             cancelDiscovery()
             call.resolve()
         } else {
-            requestPermissionForAlias(SCAN, call, "scanPermissionCallback")
+            requestScanPermission(call)
         }
     }
 
@@ -275,7 +275,7 @@ class BluetoothSerialPlugin : Plugin() {
             discoveryCall?.reject("Discovery cancelled")
             discoveryCall = null
             implementation.cancelDiscovery()
-            activity.unregisterReceiver(discoveryReceiver)
+            discoveryReceiver?.let { activity.unregisterReceiver(it) }
             discoveryReceiver = null
         }
     }
@@ -392,6 +392,14 @@ class BluetoothSerialPlugin : Plugin() {
             getPermissionState(alias) == PermissionState.GRANTED
         else
             true
+
+    private fun requestConnectPermission(call: PluginCall) {
+        requestPermissionForAlias(CONNECT, call, "connectPermissionCallback")
+    }
+
+    private fun requestScanPermission(call: PluginCall) {
+        requestPermissionForAlias(SCAN, call, "scanPermissionCallback")
+    }
 
     @SuppressLint("MissingPermission")
     private fun deviceToJSON(device: BluetoothDevice): JSObject = JSObject()

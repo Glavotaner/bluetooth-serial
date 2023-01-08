@@ -243,6 +243,7 @@ class BluetoothSerial(
 
     private fun closeConnection() {
         mConnectJob?.cancel()
+        mConnectJob = null
         mConnectedDevice?.disconnect()
         mConnectedDevice = null
     }
