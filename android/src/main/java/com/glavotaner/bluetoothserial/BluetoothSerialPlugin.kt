@@ -21,6 +21,7 @@ import com.getcapacitor.annotation.ActivityCallback
 import com.getcapacitor.annotation.CapacitorPlugin
 import com.getcapacitor.annotation.Permission
 import com.getcapacitor.annotation.PermissionCallback
+import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONException
 import java.lang.IllegalArgumentException
@@ -101,28 +102,28 @@ class BluetoothSerialPlugin : Plugin() {
     }
 
     @PluginMethod
-    suspend fun connect(call: PluginCall) {
+    fun connect(call: PluginCall) {
         connect(call) { device -> implementation.connect(device) }
     }
 
     @PluginMethod
-    suspend fun connectInsecure(call: PluginCall) {
+    fun connectInsecure(call: PluginCall) {
         connect(call) { device -> implementation.connectInsecure(device) }
     }
 
-    private suspend fun connect(call: PluginCall, connect: suspend (BluetoothDevice) -> Unit) {
+    private fun connect(call: PluginCall, connect: suspend (BluetoothDevice) -> Unit) {
         if (rejectIfBluetoothDisabled(call)) return
         if (hasCompatPermission(CONNECT)) connectToDevice(call, connect)
         else requestConnectPermission(call)
     }
 
-    private suspend fun connectToDevice(call: PluginCall, connect: suspend (BluetoothDevice) -> Unit) {
+    private fun connectToDevice(call: PluginCall, connect: suspend (BluetoothDevice) -> Unit) {
         val macAddress = call.getString("address")
         try {
             val device = implementation.getRemoteDevice(macAddress)
             if (device != null) {
                 connectCall = call
-                connect(device)
+                runBlocking { connect(device) }
                 buffer.setLength(0)
             } else {
                 call.reject("Could not connect to $macAddress")
@@ -141,7 +142,7 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     @Throws(JSONException::class)
-    suspend fun write(call: PluginCall) {
+    fun write(call: PluginCall) {
         if (rejectIfBluetoothDisabled(call)) return
         val data = (call.data["data"] as String).toByteArray()
         writeCall = call
@@ -356,7 +357,7 @@ class BluetoothSerialPlugin : Plugin() {
     }
 
     @PermissionCallback
-    private suspend fun connectPermissionCallback(call: PluginCall) {
+    private fun connectPermissionCallback(call: PluginCall) {
         if (getPermissionState(CONNECT) == PermissionState.GRANTED) {
             when (call.methodName) {
                 "enable" -> enableBluetooth(call)

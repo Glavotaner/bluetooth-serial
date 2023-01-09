@@ -103,6 +103,7 @@ class BluetoothSerial(
         }
     }
 
+    @SuppressLint("MissingPermission")
     private suspend fun connect(socket: BluetoothSocket, socketType: String) {
         Log.i(TAG, "BEGIN mConnectThread SocketType: $socketType")
         // Always cancel discovery because it will slow down a connection
@@ -123,20 +124,19 @@ class BluetoothSerial(
                         mConnectedDevice!!.read()
                     }
                 } catch (e: IOException) {
-                    handleConnectionError(e.message ?: "Unable to connect")
                     try {
                         @Suppress("BlockingMethodInNonBlockingContext")
                         socket.close()
                     } catch(error: IOException) {
                         Log.e(TAG, "Could not close socket ${error.message ?: ""}")
                     }
+                    handleConnectionError(e.message ?: "Unable to connect")
                 }
             }
         }
     }
 
     private fun sendConnectionErrorToPlugin(error: String) {
-        mState = ConnectionState.NONE
         val bundle = Bundle().apply {
             putInt("state", ConnectionState.NONE.value())
             putString("error", error)
@@ -149,11 +149,9 @@ class BluetoothSerial(
      *
      * @param out The bytes to write
      */
-    suspend fun write(out: ByteArray?) {
+    fun write(out: ByteArray?) {
         if (mState === ConnectionState.CONNECTED) {
-            coroutineScope {
                 mConnectedDevice!!.write(out)
-            }
         } else {
             writeHandler.obtainMessage(ERROR).apply {
                 data = Bundle().apply { putString("error", "Not connected") }
