@@ -23,54 +23,54 @@ private const val D = true
 private val UUID_SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
 class BluetoothSerial(
-    private val mAdapter: BluetoothAdapter,
+    private val bluetoothAdapter: BluetoothAdapter,
     private val connectionHandler: Handler,
     private val writeHandler: Handler,
     private val readHandler: Handler
 ) {
     // Member fields
-    private var mConnectedDevice: ConnectedDevice? = null
-    private var mConnectJob: Job? = null
-    private var mState: ConnectionState
+    private var connectedDevice: ConnectedDevice? = null
+    private var connectJob: Job? = null
+    private var mConnectionState: ConnectionState
     fun echo(value: String): String {
         return value
     }
 
     fun getRemoteDevice(address: String?): BluetoothDevice? {
-        return mAdapter.getRemoteDevice(address)
+        return bluetoothAdapter.getRemoteDevice(address)
     }
 
     val isEnabled: Boolean
-        get() = mAdapter.isEnabled
+        get() = bluetoothAdapter.isEnabled
 
     @get:SuppressLint("MissingPermission")
     val bondedDevices: Set<BluetoothDevice>
-        get() = mAdapter.bondedDevices
+        get() = bluetoothAdapter.bondedDevices
 
     @SuppressLint("MissingPermission")
     fun startDiscovery() {
-        mAdapter.startDiscovery()
+        bluetoothAdapter.startDiscovery()
     }
 
     @SuppressLint("MissingPermission")
     fun cancelDiscovery() {
-        mAdapter.cancelDiscovery()
+        bluetoothAdapter.cancelDiscovery()
     }
 
     @get:Synchronized
     @set:Synchronized
-    var state: ConnectionState
-        get() = mState
+    var connectionState: ConnectionState
+        get() = mConnectionState
         private set(state) {
-            if (D) Log.d(TAG, "setState() $mState -> $state")
-            mState = state
+            if (D) Log.d(TAG, "setState() $mConnectionState -> $state")
+            mConnectionState = state
             sendStateToPlugin(state)
         }
 
     fun resetService() {
         if (D) Log.d(TAG, "start")
         closeConnection()
-        state = ConnectionState.NONE
+        connectionState = ConnectionState.NONE
     }
 
     // connect
@@ -107,21 +107,21 @@ class BluetoothSerial(
     private suspend fun connect(socket: BluetoothSocket, socketType: String) {
         Log.i(TAG, "BEGIN mConnectThread SocketType: $socketType")
         // Always cancel discovery because it will slow down a connection
-        mAdapter.cancelDiscovery()
-        state = ConnectionState.CONNECTING
-        mConnectJob?.cancel()
+        bluetoothAdapter.cancelDiscovery()
+        connectionState = ConnectionState.CONNECTING
+        connectJob?.cancel()
         Log.i(TAG, "Connecting to socket...")
         withContext(Dispatchers.IO) {
-            mConnectJob = launch {
+            connectJob = launch {
                 try {
                     // This is a blocking call and will only return on a successful connection or an exception
                     @Suppress("BlockingMethodInNonBlockingContext")
                     socket.connect()
                     if (D) Log.d(TAG, "connected, Socket Type:$socketType")
-                    mConnectedDevice = ConnectedDevice(socket, socketType)
-                    if (state === ConnectionState.CONNECTED) {
+                    connectedDevice = ConnectedDevice(socket, socketType)
+                    if (connectionState === ConnectionState.CONNECTED) {
                         Log.i(TAG, "Connected")
-                        mConnectedDevice!!.read()
+                        connectedDevice!!.read()
                     }
                 } catch (e: IOException) {
                     try {
@@ -150,8 +150,8 @@ class BluetoothSerial(
      * @param out The bytes to write
      */
     fun write(out: ByteArray?) {
-        if (state === ConnectionState.CONNECTED) {
-            mConnectedDevice!!.write(out)
+        if (connectionState === ConnectionState.CONNECTED) {
+            connectedDevice!!.write(out)
         } else {
             writeHandler.obtainMessage(ERROR).apply {
                 data = Bundle().apply { putString("error", "Not connected") }
@@ -229,10 +229,10 @@ class BluetoothSerial(
             try {
                 inStream = socket.inputStream
                 outStream = socket.outputStream
-                state = ConnectionState.CONNECTED
+                connectionState = ConnectionState.CONNECTED
             } catch (e: IOException) {
                 handleConnectionError(e.message ?: "Could not get streams")
-                mConnectJob?.cancel()
+                connectJob?.cancel()
             }
             mmInStream = inStream
             mmOutStream = outStream
@@ -246,10 +246,10 @@ class BluetoothSerial(
     }
 
     private fun closeConnection() {
-        mConnectJob?.cancel()
-        mConnectJob = null
-        mConnectedDevice?.disconnect()
-        mConnectedDevice = null
+        connectJob?.cancel()
+        connectJob = null
+        connectedDevice?.disconnect()
+        connectedDevice = null
     }
 
     private fun handleConnectionError(message: String) {
@@ -259,6 +259,6 @@ class BluetoothSerial(
     }
 
     init {
-        mState = ConnectionState.NONE
+        mConnectionState = ConnectionState.NONE
     }
 }
