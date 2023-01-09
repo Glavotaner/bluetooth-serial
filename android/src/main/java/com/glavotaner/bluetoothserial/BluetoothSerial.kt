@@ -108,7 +108,7 @@ class BluetoothSerial(
         Log.i(TAG, "BEGIN mConnectThread SocketType: $socketType")
         // Always cancel discovery because it will slow down a connection
         mAdapter.cancelDiscovery()
-        mState = ConnectionState.CONNECTING
+        state = ConnectionState.CONNECTING
         mConnectJob?.cancel()
         Log.i(TAG, "Connecting to socket...")
         withContext(Dispatchers.IO) {
@@ -119,7 +119,7 @@ class BluetoothSerial(
                     socket.connect()
                     if (D) Log.d(TAG, "connected, Socket Type:$socketType")
                     mConnectedDevice = ConnectedDevice(socket, socketType)
-                    if (mState === ConnectionState.CONNECTED) {
+                    if (state === ConnectionState.CONNECTED) {
                         Log.i(TAG, "Connected")
                         mConnectedDevice!!.read()
                     }
@@ -150,8 +150,8 @@ class BluetoothSerial(
      * @param out The bytes to write
      */
     fun write(out: ByteArray?) {
-        if (mState === ConnectionState.CONNECTED) {
-                mConnectedDevice!!.write(out)
+        if (state === ConnectionState.CONNECTED) {
+            mConnectedDevice!!.write(out)
         } else {
             writeHandler.obtainMessage(ERROR).apply {
                 data = Bundle().apply { putString("error", "Not connected") }
@@ -229,7 +229,7 @@ class BluetoothSerial(
             try {
                 inStream = socket.inputStream
                 outStream = socket.outputStream
-                mState = ConnectionState.CONNECTED
+                state = ConnectionState.CONNECTED
             } catch (e: IOException) {
                 handleConnectionError(e.message ?: "Could not get streams")
                 mConnectJob?.cancel()
