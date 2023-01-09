@@ -122,6 +122,7 @@ class BluetoothSerialPlugin : Plugin() {
         try {
             val device = implementation.getRemoteDevice(macAddress)
             if (device != null) {
+                cancelDiscovery()
                 connectCall = call
                 runBlocking { connect(device) }
                 buffer.setLength(0)

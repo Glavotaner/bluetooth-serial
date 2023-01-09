@@ -106,8 +106,6 @@ class BluetoothSerial(
     @SuppressLint("MissingPermission")
     private suspend fun connect(socket: BluetoothSocket, socketType: String) {
         Log.i(TAG, "BEGIN mConnectThread SocketType: $socketType")
-        // Always cancel discovery because it will slow down a connection
-        bluetoothAdapter.cancelDiscovery()
         connectionState = ConnectionState.CONNECTING
         connectJob?.cancel()
         Log.i(TAG, "Connecting to socket...")
