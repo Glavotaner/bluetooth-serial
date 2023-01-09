@@ -119,19 +119,20 @@ class BluetoothSerialPlugin : Plugin() {
 
     private fun connectToDevice(call: PluginCall, connect: suspend (BluetoothDevice) -> Unit) {
         val macAddress = call.getString("address")
+        val device: BluetoothDevice?
         try {
-            val device = implementation.getRemoteDevice(macAddress)
-            if (device != null) {
-                cancelDiscovery()
-                connectCall = call
-                runBlocking { connect(device) }
-                buffer.setLength(0)
-            } else {
-                call.reject("Could not connect to $macAddress")
-            }
-        } catch (error: IllegalArgumentException) {
-            // most likely invalid mac
-            call.reject(error.message)
+            device = implementation.getRemoteDevice(macAddress)
+        } catch(error: IllegalArgumentException) {
+            call.reject("Invalid address")
+            return
+        }
+        if (device != null) {
+            cancelDiscovery()
+            connectCall = call
+            runBlocking { connect(device) }
+            buffer.setLength(0)
+        } else {
+            call.reject("Could not connect to $macAddress")
         }
     }
 
