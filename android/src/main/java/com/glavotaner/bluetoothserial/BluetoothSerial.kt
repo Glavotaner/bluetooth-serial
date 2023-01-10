@@ -115,12 +115,11 @@ class BluetoothSerial(
                     // This is a blocking call and will only return on a successful connection or an exception
                     @Suppress("BlockingMethodInNonBlockingContext")
                     socket.connect()
+                    connectionState = ConnectionState.CONNECTED
                     if (D) Log.d(TAG, "connected, Socket Type:$socketType")
                     connectedDevice = ConnectedDevice(socket, socketType)
-                    if (connectionState === ConnectionState.CONNECTED) {
-                        Log.i(TAG, "Connected")
-                        connectedDevice!!.read()
-                    }
+                    Log.i(TAG, "Connected")
+                    connectedDevice!!.read()
                 } catch (e: IOException) {
                     try {
                         @Suppress("BlockingMethodInNonBlockingContext")
@@ -227,7 +226,6 @@ class BluetoothSerial(
             try {
                 inStream = socket.inputStream
                 outStream = socket.outputStream
-                connectionState = ConnectionState.CONNECTED
             } catch (e: IOException) {
                 handleConnectionError(e.message ?: "Could not get streams")
                 connectJob?.cancel()
