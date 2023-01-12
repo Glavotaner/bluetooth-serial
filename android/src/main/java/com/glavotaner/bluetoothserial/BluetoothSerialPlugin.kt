@@ -268,7 +268,7 @@ class BluetoothSerialPlugin : Plugin() {
 
     private fun hasDiscoveryPermissions(): Boolean {
         return discoveryPermissions.all { alias ->
-            getPermissionState(alias) != PermissionState.GRANTED
+            getPermissionState(alias) === PermissionState.GRANTED
         }
     }
 
@@ -280,7 +280,7 @@ class BluetoothSerialPlugin : Plugin() {
     @PermissionCallback
     private fun discoveryPermissionsCallback(call: PluginCall) {
         for (alias in discoveryPermissions) {
-            if (getPermissionState(alias) != PermissionState.GRANTED) {
+            if (getPermissionState(alias) !== PermissionState.GRANTED) {
                 call.reject("$alias permission denied")
                 return
             }
