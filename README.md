@@ -15,6 +15,7 @@ npx cap sync
 
 * [`echo(...)`](#echo)
 * [`connect(...)`](#connect)
+* [`connectInsecure(...)`](#connectinsecure)
 * [`disconnect()`](#disconnect)
 * [`read()`](#read)
 * [`write(...)`](#write)
@@ -59,16 +60,33 @@ echo(options: { value: string; }) => Promise<{ value: string; }>
 ### connect(...)
 
 ```typescript
-connect(options: { address: string; secure?: boolean; }) => Promise<void>
+connect(options: connectionOptions) => Promise<void>
 ```
 
 Connects to the bluetooth device with the given address.
 The plugin only retains one connection at a time; upon connecting to a device, while there is already an existing connection,
 the previous device is disconnected.
 
-| Param         | Type                                                |
-| ------------- | --------------------------------------------------- |
-| **`options`** | <code>{ address: string; secure?: boolean; }</code> |
+| Param         | Type                                                            |
+| ------------- | --------------------------------------------------------------- |
+| **`options`** | <code><a href="#connectionoptions">connectionOptions</a></code> |
+
+--------------------
+
+
+### connectInsecure(...)
+
+```typescript
+connectInsecure(options: connectionOptions) => Promise<void>
+```
+
+Connects to the bluetooth device with the given address.
+The plugin only retains one connection at a time; upon connecting to a device, while there is already an existing connection,
+the previous device is disconnected.
+
+| Param         | Type                                                            |
+| ------------- | --------------------------------------------------------------- |
+| **`options`** | <code><a href="#connectionoptions">connectionOptions</a></code> |
 
 --------------------
 
@@ -319,6 +337,11 @@ removeAllListeners() => Promise<void>
 
 
 ### Type Aliases
+
+
+#### connectionOptions
+
+<code>{ address: string }</code>
 
 
 #### devices
