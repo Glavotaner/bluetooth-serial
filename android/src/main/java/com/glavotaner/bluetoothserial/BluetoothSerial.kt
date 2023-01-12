@@ -9,7 +9,6 @@ import android.os.Handler
 import android.util.Log
 import com.glavotaner.bluetoothserial.Message.ERROR
 import com.glavotaner.bluetoothserial.Message.SUCCESS
-import kotlinx.coroutines.*
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -23,60 +22,82 @@ private const val D = true
 private val UUID_SPP = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
 
 class BluetoothSerial(
-    private val bluetoothAdapter: BluetoothAdapter,
+    private val mAdapter: BluetoothAdapter,
     private val connectionHandler: Handler,
     private val writeHandler: Handler,
     private val readHandler: Handler
 ) {
     // Member fields
-    private var connectedDevice: ConnectedDevice? = null
-    private var connectJob: Job? = null
-    private var mConnectionState: ConnectionState
+    private var mConnectThread: ConnectThread? = null
+    private var mIOThread: IOThread? = null
+    private var mState: ConnectionState
     fun echo(value: String): String {
         return value
     }
 
-    fun getRemoteDevice(address: String?): BluetoothDevice? {
-        return bluetoothAdapter.getRemoteDevice(address)
+    fun getRemoteDevice(address: String?): BluetoothDevice {
+        return mAdapter.getRemoteDevice(address)
     }
 
     val isEnabled: Boolean
-        get() = bluetoothAdapter.isEnabled
+        get() = mAdapter.isEnabled
 
+    // connect
     @get:SuppressLint("MissingPermission")
     val bondedDevices: Set<BluetoothDevice>
-        get() = bluetoothAdapter.bondedDevices
+        get() = mAdapter.bondedDevices
 
+    // scan
     @SuppressLint("MissingPermission")
     fun startDiscovery() {
-        bluetoothAdapter.startDiscovery()
+        mAdapter.startDiscovery()
     }
 
+    // scan
     @SuppressLint("MissingPermission")
     fun cancelDiscovery() {
-        bluetoothAdapter.cancelDiscovery()
+        mAdapter.cancelDiscovery()
     }
 
-    @get:Synchronized
-    @set:Synchronized
-    var connectionState: ConnectionState
-        get() = mConnectionState
-        private set(state) {
-            if (D) Log.d(TAG, "setState() $mConnectionState -> $state")
-            mConnectionState = state
-            sendStateToPlugin(state)
-        }
+    val isConnected: Boolean
+        get() = mState === ConnectionState.CONNECTED
 
+    /**
+     * Set the current state of the chat connection
+     *
+     * @param state An integer defining the current connection state
+     */
+    @Synchronized
+    private fun setState(state: ConnectionState) {
+        if (D) Log.d(
+            TAG,
+            "setState() $mState -> $state"
+        )
+        mState = state
+        sendStateToPlugin(state)
+    }
+
+    private fun sendStateToPlugin(state: ConnectionState) {
+        val bundle = Bundle()
+        bundle.putInt("state", state.value())
+        sendConnectionStateToPlugin(SUCCESS, bundle)
+    }
+
+    @Synchronized
     fun resetService() {
         if (D) Log.d(TAG, "start")
-        closeConnection()
-        connectionState = ConnectionState.NONE
+        closeRunningThreads()
+        setState(ConnectionState.NONE)
     }
 
     // connect
     @SuppressLint("MissingPermission")
-    suspend fun connect(device: BluetoothDevice) {
-        if (D) Log.d(TAG, "connect to: $device")
+    @Synchronized
+    fun connect(device: BluetoothDevice) {
+        if (D) Log.d(
+            TAG,
+            "connect to: $device"
+        )
         connectToSocketOfType("secure") {
             device.createRfcommSocketToServiceRecord(UUID_SPP)
         }
@@ -84,97 +105,152 @@ class BluetoothSerial(
 
     // connect
     @SuppressLint("MissingPermission")
-    suspend fun connectInsecure(device: BluetoothDevice) {
-        if (D) Log.d(TAG, "connect to: $device")
+    @Synchronized
+    fun connectInsecure(device: BluetoothDevice) {
+        if (D) Log.d(
+            TAG,
+            "connect to: $device"
+        )
         connectToSocketOfType("insecure") {
             device.createInsecureRfcommSocketToServiceRecord(UUID_SPP)
         }
     }
 
-    private suspend fun connectToSocketOfType(socketType: String, createSocket: () -> BluetoothSocket?) {
+    private fun connectToSocketOfType(socketType: String, createSocket: () -> BluetoothSocket?) {
         try {
-            closeConnection()
+            setState(ConnectionState.CONNECTING)
             val socket = createSocket()
             if (socket != null) connect(socket, socketType)
-            else sendConnectionErrorToPlugin("Could not connect")
+            else sendConnectionErrorToPlugin("Could not create socket")
         } catch (e: IOException) {
-            Log.e(TAG, "Socket Type: $socketType create() failed", e)
-            sendConnectionErrorToPlugin(e.message!!)
+            Log.e(
+                TAG,
+                "Socket Type: $socketType create() failed", e
+            )
+            handleConnectionError(e.message)
         }
     }
 
-    @SuppressLint("MissingPermission")
-    private suspend fun connect(socket: BluetoothSocket, socketType: String) {
-        Log.i(TAG, "BEGIN mConnectThread SocketType: $socketType")
-        connectionState = ConnectionState.CONNECTING
-        connectJob?.cancel()
-        Log.i(TAG, "Connecting to socket...")
-        withContext(Dispatchers.IO) {
-            connectJob = launch {
-                try {
-                    // This is a blocking call and will only return on a successful connection or an exception
-                    @Suppress("BlockingMethodInNonBlockingContext")
-                    socket.connect()
-                    connectionState = ConnectionState.CONNECTED
-                    if (D) Log.d(TAG, "connected, Socket Type:$socketType")
-                    connectedDevice = ConnectedDevice(socket, socketType)
-                    Log.i(TAG, "Connected")
-                    connectedDevice!!.read()
-                } catch (e: IOException) {
-                    try {
-                        @Suppress("BlockingMethodInNonBlockingContext")
-                        socket.close()
-                    } catch(error: IOException) {
-                        Log.e(TAG, "Could not close socket ${error.message ?: ""}")
-                    }
-                    handleConnectionError(e.message ?: "Unable to connect")
-                }
-            }
-        }
-    }
-
-    private fun sendConnectionErrorToPlugin(error: String) {
-        val bundle = Bundle().apply {
-            putInt("state", ConnectionState.NONE.value())
-            putString("error", error)
-        }
-        sendConnectionStateToPlugin(ERROR, bundle)
+    private fun sendConnectionErrorToPlugin(error: String?) {
+        sendConnectionStateToPlugin(ERROR, Bundle().apply { putString("error", error) })
     }
 
     /**
-     * Write to the ConnectedThread in an unsynchronized manner
+     * Start the ConnectThread to initiate a connection to a remote device.
      *
-     * @param out The bytes to write
      */
-    fun write(out: ByteArray?) {
-        if (connectionState === ConnectionState.CONNECTED) {
-            connectedDevice!!.write(out)
-        } else {
-            writeHandler.obtainMessage(ERROR).apply {
-                data = Bundle().apply { putString("error", "Not connected") }
-            }.sendToTarget()
-        }
+    @Synchronized
+    private fun connect(socket: BluetoothSocket, socketType: String) {
+        // Cancel any thread attempting to make a connection
+        closeRunningThreads()
+        // Start the thread to connect with the given device
+        mConnectThread = ConnectThread(socket, socketType)
+        mConnectThread!!.start()
     }
 
-    private fun sendStateToPlugin(state: ConnectionState) {
-        val stateBundle = Bundle().apply { putInt("state", state.value()) }
-        sendConnectionStateToPlugin(SUCCESS, stateBundle)
+    /**
+     * Write to the IOThread in an unsynchronized manner
+     *
+     * @param out The bytes to write
+     * @see IOThread.write
+     */
+    fun write(out: ByteArray?) {
+        if (isConnected) {
+            var r: IOThread?
+            // Synchronize a copy of the ConnectedThread
+            synchronized(this) { r = mIOThread }
+            r!!.write(out)
+        } else {
+            val message = writeHandler.obtainMessage(ERROR)
+            message.data = Bundle().apply { putString("error", "Not connected") }
+            message.sendToTarget()
+        }
     }
 
     private fun sendConnectionStateToPlugin(status: Int, bundle: Bundle) {
         connectionHandler.obtainMessage(status).apply { data = bundle }.sendToTarget()
     }
 
-    private inner class ConnectedDevice(socket: BluetoothSocket, socketType: String) {
+    /**
+     * This thread runs while attempting to make an outgoing connection
+     * with a device. It runs straight through; the connection either
+     * succeeds or fails.
+     */
+    private inner class ConnectThread(
+        private val mmSocket: BluetoothSocket,
+        private val mSocketType: String
+    ) :
+        Thread() {
+        // connect
+        @SuppressLint("MissingPermission")
+        override fun run() {
+            Log.i(
+                TAG,
+                "BEGIN mConnectThread SocketType:$mSocketType"
+            )
+            name = "ConnectThread$mSocketType"
+            try {
+                mmSocket.connect()
+                Log.i(TAG, "Connected")
+            } catch (e: IOException) {
+                Log.e(TAG, e.toString())
+                handleConnectionError(e.message)
+                return
+            }
+            // Reset the ConnectThread because we're done
+            synchronized(this@BluetoothSerial) { mConnectThread = null }
+            startIOThread()
+        }
+
+        /**
+         * Start the IOThread to begin managing a Bluetooth connection
+         */
+        private fun startIOThread() {
+            synchronized(this@BluetoothSerial) {
+                if (D) Log.d(
+                    TAG,
+                    "connected, Socket Type:$mSocketType"
+                )
+                // Start the thread to manage the connection and perform transmissions
+                mIOThread = IOThread(mmSocket, mSocketType)
+                mIOThread!!.start()
+            }
+        }
+
+        fun cancel() {
+            try {
+                mmSocket.close()
+            } catch (e: IOException) {
+                Log.e(
+                    TAG,
+                    "close() of connect $mSocketType socket failed", e
+                )
+            }
+        }
+    }
+
+    /**
+     * This thread runs during a connection with a remote device.
+     * It handles all incoming and outgoing transmissions.
+     */
+    private inner class IOThread(socket: BluetoothSocket, socketType: String) :
+        Thread() {
         private val mmSocket: BluetoothSocket
         private val mmInStream: InputStream?
         private val mmOutStream: OutputStream?
-
-        fun disconnect() {
-            try {
-                mmSocket.close()
-            } catch(error: IOException) {
-                Log.e(TAG, "could not close socket ${error.message ?: ""}")
+        override fun run() {
+            Log.i(TAG, "BEGIN mConnectedThread")
+            val buffer = ByteArray(1024)
+            var connected = true
+            while (connected) {
+                try {
+                    val data = getBufferData(buffer)
+                    sendToPlugin(data)
+                } catch (e: IOException) {
+                    connected = false
+                    Log.e(TAG, "disconnected", e)
+                    handleConnectionError("Device connection was lost")
+                }
             }
         }
 
@@ -182,23 +258,6 @@ class BluetoothSerial(
         private fun getBufferData(buffer: ByteArray): String {
             val bytes = mmInStream!!.read(buffer)
             return String(buffer, 0, bytes)
-        }
-
-        fun read() {
-            Log.i(TAG, "BEGIN mConnectedThread")
-            val buffer = ByteArray(1024)
-            // Keep listening to the InputStream while connected
-            while (true) {
-                try {
-                    // Read from the InputStream
-                    val data = getBufferData(buffer)
-                    // Send the new data String to the UI Activity
-                    sendReadData(data)
-                } catch (e: IOException) {
-                    handleConnectionError("Device connection was lost")
-                    break
-                }
-            }
         }
 
         /**
@@ -215,46 +274,56 @@ class BluetoothSerial(
                 Log.e(TAG, "Exception during write", e)
                 message.data = Bundle().apply { putString("error", e.message) }
             }
+            // Share the sent message back to the UI Activity
+            message.sendToTarget()
+        }
+
+        fun cancel() {
+            try {
+                mmSocket.close()
+            } catch (e: IOException) {
+                Log.e(TAG, "close() of connect socket failed", e)
+            }
+        }
+
+        private fun sendToPlugin(data: String) {
+            val message = readHandler.obtainMessage(SUCCESS)
+            message.data = Bundle().apply { putString("data", data) }
             message.sendToTarget()
         }
 
         init {
             Log.d(TAG, "create ConnectedThread: $socketType")
             mmSocket = socket
-            var inStream: InputStream? = null
-            var outStream: OutputStream? = null
+            var tmpIn: InputStream? = null
+            var tmpOut: OutputStream? = null
+            // Get the BluetoothSocket input and output streams
             try {
-                inStream = socket.inputStream
-                outStream = socket.outputStream
+                tmpIn = socket.inputStream
+                tmpOut = socket.outputStream
+                setState(ConnectionState.CONNECTED)
             } catch (e: IOException) {
-                handleConnectionError(e.message ?: "Could not get streams")
-                connectJob?.cancel()
+                Log.e(TAG, "temp sockets not created", e)
+                handleConnectionError("Could not create sockets")
             }
-            mmInStream = inStream
-            mmOutStream = outStream
+            mmInStream = tmpIn
+            mmOutStream = tmpOut
         }
     }
 
-    private fun sendReadData(data: String) {
-        readHandler.obtainMessage(SUCCESS).apply {
-            this.data = Bundle().apply { putString("data", data) }
-        }.sendToTarget()
+    private fun closeRunningThreads() {
+        mConnectThread?.cancel()
+        mConnectThread = null
+        mIOThread?.cancel()
+        mIOThread = null
     }
 
-    private fun closeConnection() {
-        connectJob?.cancel()
-        connectJob = null
-        connectedDevice?.disconnect()
-        connectedDevice = null
-    }
-
-    private fun handleConnectionError(message: String) {
-        Log.e(TAG, message)
+    private fun handleConnectionError(message: String?) {
         sendConnectionErrorToPlugin(message)
         resetService()
     }
 
     init {
-        mConnectionState = ConnectionState.NONE
+        mState = ConnectionState.NONE
     }
 }
