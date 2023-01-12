@@ -338,7 +338,7 @@ class BluetoothSerialPlugin : Plugin() {
                         BluetoothDevice.EXTRA_DEVICE,
                         BluetoothDevice::class.java
                     )
-                else intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                else intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
         }
         val filter = IntentFilter().apply {
             addAction(BluetoothDevice.ACTION_FOUND)
