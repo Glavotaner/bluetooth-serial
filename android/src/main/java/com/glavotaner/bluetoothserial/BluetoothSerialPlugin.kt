@@ -201,7 +201,7 @@ class BluetoothSerialPlugin : Plugin() {
 
     @PluginMethod
     fun isConnected(call: PluginCall) {
-        val result = JSObject().put("isConnected", implementation!!.isConnected)
+        val result = JSObject().put("isConnected", implementation!!.isConnected())
         call.resolve(result)
     }
 

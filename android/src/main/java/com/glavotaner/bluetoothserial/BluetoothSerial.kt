@@ -57,6 +57,8 @@ class BluetoothSerial(
         mAdapter.cancelDiscovery()
     }
 
+    fun isConnected() = state === ConnectionState.CONNECTED
+
     @get:Synchronized
     @set:Synchronized
     var state: ConnectionState
@@ -75,23 +77,22 @@ class BluetoothSerial(
 
     // connect
     @SuppressLint("MissingPermission")
-    suspend fun connect(device: BluetoothDevice) {
+    fun connect(device: BluetoothDevice) {
         if (D) Log.d(TAG, "connect to: $device")
         connectToSocketOfType("secure") {
             device.createRfcommSocketToServiceRecord(UUID_SPP)
         }
     }
-
     // connect
     @SuppressLint("MissingPermission")
-    suspend fun connectInsecure(device: BluetoothDevice) {
+    fun connectInsecure(device: BluetoothDevice) {
         if (D) Log.d(TAG, "connect to: $device")
         connectToSocketOfType("insecure") {
             device.createInsecureRfcommSocketToServiceRecord(UUID_SPP)
         }
     }
 
-    private suspend fun connectToSocketOfType(socketType: String, createSocket: () -> BluetoothSocket?) {
+    private fun connectToSocketOfType(socketType: String, createSocket: () -> BluetoothSocket?) {
         try {
             closeConnection()
             val socket = createSocket()
@@ -103,29 +104,22 @@ class BluetoothSerial(
         }
     }
 
-    private suspend fun connect(socket: BluetoothSocket, socketType: String) {
+    @OptIn(DelicateCoroutinesApi::class)
+    private fun connect(socket: BluetoothSocket, socketType: String) {
         Log.i(TAG, "BEGIN mConnectThread SocketType: $socketType")
-        // Always cancel discovery because it will slow down a connection
-        mAdapter.cancelDiscovery()
         mState = ConnectionState.CONNECTING
-        mConnectJob?.cancel()
         Log.i(TAG, "Connecting to socket...")
-        withContext(Dispatchers.IO) {
-            mConnectJob = launch {
-                try {
-                    // This is a blocking call and will only return on a successful connection or an exception
-                    @Suppress("BlockingMethodInNonBlockingContext")
-                    socket.connect()
-                    if (D) Log.d(TAG, "connected, Socket Type:$socketType")
-                    mConnectedDevice = ConnectedDevice(socket, socketType)
-                    if (mState === ConnectionState.CONNECTED) {
-                        Log.i(TAG, "Connected")
-                        mConnectedDevice!!.read()
-                    }
-                } catch (e: IOException) {
-                    handleConnectionError(e.message ?: "Unable to connect")
-                }
+        mConnectJob = GlobalScope.launch(Dispatchers.IO) {
+            try {
+                // This is a blocking call and will only return on a successful connection or an exception
+                socket.connect()
+            } catch (e: IOException) {
+                handleConnectionError(e.message ?: "Unable to connect")
             }
+            if (D) Log.d(TAG, "connected, Socket Type:$socketType")
+            mConnectedDevice = ConnectedDevice(socket, socketType)
+            Log.i(TAG, "Connected")
+            mConnectedDevice!!.listen()
         }
     }
 
@@ -143,11 +137,9 @@ class BluetoothSerial(
      *
      * @param out The bytes to write
      */
-    suspend fun write(out: ByteArray?) {
+    fun write(out: ByteArray?) {
         if (mState === ConnectionState.CONNECTED) {
-            coroutineScope {
-                mConnectedDevice!!.write(out)
-            }
+            mConnectedDevice!!.write(out)
         } else {
             writeHandler.obtainMessage(ERROR).apply {
                 data = Bundle().apply { putString("error", "Not connected") }
@@ -183,11 +175,11 @@ class BluetoothSerial(
             return String(buffer, 0, bytes)
         }
 
-        fun read() {
+        fun listen() {
             Log.i(TAG, "BEGIN mConnectedThread")
             val buffer = ByteArray(1024)
-            // Keep listening to the InputStream while connected
-            while (true) {
+            var connected = true
+            while (connected) {
                 try {
                     // Read from the InputStream
                     val data = getBufferData(buffer)
@@ -195,9 +187,15 @@ class BluetoothSerial(
                     sendReadData(data)
                 } catch (e: IOException) {
                     handleConnectionError("Device connection was lost")
-                    break
+                    connected = false
                 }
             }
+        }
+
+        private fun sendReadData(data: String) {
+            readHandler.obtainMessage(SUCCESS).apply {
+                this.data = Bundle().apply { putString("data", data) }
+            }.sendToTarget()
         }
 
         /**
@@ -228,17 +226,10 @@ class BluetoothSerial(
                 mState = ConnectionState.CONNECTED
             } catch (e: IOException) {
                 handleConnectionError(e.message ?: "Could not get streams")
-                mConnectJob?.cancel()
             }
             mmInStream = inStream
             mmOutStream = outStream
         }
-    }
-
-    private fun sendReadData(data: String) {
-        readHandler.obtainMessage(SUCCESS).apply {
-            this.data = Bundle().apply { putString("data", data) }
-        }.sendToTarget()
     }
 
     private fun closeConnection() {
