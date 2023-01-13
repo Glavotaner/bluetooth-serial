@@ -74,25 +74,24 @@ class BluetoothSerialPlugin : Plugin() {
             if (message.what == SUCCESS) {
                 val state = JSObject().put("state", connectionState.value())
                 notifyListeners("connectionChange", state)
-                if (connectCall != null && connectionState === ConnectionState.CONNECTED) {
-                    connectCall!!.resolve(state)
+                if (connectionState === ConnectionState.CONNECTED) {
+                    connectCall?.resolve(state)
                     connectCall = null
                 }
                 if (connectionState === ConnectionState.NONE) connectCall = null
             } else if (connectCall != null) {
                 val error: String = data.getString("error") ?: "Error"
-                connectCall!!.reject(error)
+                connectCall?.reject(error)
                 connectCall = null
             }
             false
         }
         val writeHandler = Handler(looper) { message: Message ->
-            if (writeCall == null) false
             if (message.what == SUCCESS) {
-                writeCall!!.resolve()
-            } else {
+                writeCall?.resolve()
+            } else if (writeCall !== null) {
                 val error = message.data.getString("error")
-                writeCall!!.reject(error)
+                writeCall?.reject(error)
             }
             writeCall = null
             false
@@ -141,6 +140,7 @@ class BluetoothSerialPlugin : Plugin() {
 
     private fun connect(call: PluginCall, connect: (BluetoothDevice) -> Unit) {
         if (rejectIfBluetoothDisabled(call)) return
+        connectCall?.reject("Connection interrupted")
         if (hasCompatPermission(CONNECT)) connectToDevice(call, connect)
         else requestConnectPermission(call)
     }
