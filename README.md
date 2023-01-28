@@ -1,6 +1,18 @@
 # bluetooth-serial
 
-Use native bluetooth functionality
+Use classic bluetooth functionality.
+
+How this plugin is different from it's source:
+#### Capacitor-based
+#### Promise-based
+#### Adapted for permission requirements at least from Android 5.1 upto Android 11+
+#### Only supports bluetooth classic on Android, no other platform is supported
+
+## Permissions
+For things to work, you need to add certain permissions into your AndroidManifest. Refer to this for a detailed description:
+https://developer.android.com/guide/topics/connectivity/bluetooth/permissions
+
+The plugin requests/checks permissions in a granular fashion; a call that only requires the CONNECT permission will only check/request that permission. As opposed to every call that requires any permission, requesting all of them.
 
 ## Install
 
@@ -232,7 +244,7 @@ Begins the discovery of nearby <a href="#devices">devices</a> and resolves with 
 There may only be one discovery process at a time. If another call starts while there is a discovery in progress,
 the original call will resolve with "Discovery cancelled".
 
-On Android API &gt;= 30 requires SCAN and FINE_LOCATION <a href="#permissions">permissions</a>.
+On Android API &gt;= 30 requires SCAN, CONNECT and FINE_LOCATION <a href="#permissions">permissions</a>.
 You can declare in your manifest that scanning for <a href="#devices">devices</a> is not used to derive the user's location. In that case, you may also
 add the following into your capacitor.config.ts to indicate that the plugin should not require FINE_LOCATION:
 
@@ -240,7 +252,7 @@ BluetoothSerial: {
  neverScanForLocation: true,
 }
 
-In that case, only SCAN is required.
+In that case, only SCAN and CONNECT are required.
 
 On Android 10 and 11, only FINE_LOCATION is required.
 
@@ -346,6 +358,10 @@ removeAllListeners() => Promise<void>
 
 
 #### BluetoothDevice
+The deviceClass property is a decimal representation of a given device's Bluetooth Class of Device which signifies what type of device it is.
+Eg. for printers, deviceClass will be 1664.
+If you need to know what deviceClass to expect for devices you're working with, you may use this website to get the binary or hexadecimal representation of a given device type: http://bluetooth-pentest.narod.ru/software/bluetooth_class_of_device-service_generator.html
+Then you can use a website such as: https://www.rapidtables.com/convert/number/hex-to-decimal.html , to convert the given hexadecimal value into a decimal value, which will ultimately correspond to the deviceClass.
 
 | Prop              | Type                |
 | ----------------- | ------------------- |

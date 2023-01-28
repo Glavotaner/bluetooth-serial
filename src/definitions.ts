@@ -64,7 +64,7 @@ export interface BluetoothSerialPlugin {
    * There may only be one discovery process at a time. If another call starts while there is a discovery in progress,
    * the original call will resolve with "Discovery cancelled".
    * 
-   * On Android API >= 30 requires SCAN and FINE_LOCATION permissions.
+   * On Android API >= 30 requires SCAN, CONNECT and FINE_LOCATION permissions.
    * You can declare in your manifest that scanning for devices is not used to derive the user's location. In that case, you may also
    * add the following into your capacitor.config.ts to indicate that the plugin should not require FINE_LOCATION:
    * 
@@ -72,7 +72,7 @@ export interface BluetoothSerialPlugin {
    *  neverScanForLocation: true,
    * }
    * 
-   * In that case, only SCAN is required.
+   * In that case, only SCAN and CONNECT are required.
    * 
    * On Android 10 and 11, only FINE_LOCATION is required.
    * 
